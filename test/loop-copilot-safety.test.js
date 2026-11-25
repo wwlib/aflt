@@ -406,12 +406,16 @@ exit 1
   it('refuses a live run with a clear message when the engine CLI is missing', async () => {
     gitInit(cwd);
     const prevPath = process.env.PATH;
-    // Only git + node; no cursor-agent and no bare \`agent\`.
+    // Only git + node in PATH. Do not put the node binary's directory on PATH —
+    // hosts often ship an unrelated `agent` next to node (e.g. Grok), and
+    // agentBinaryIsCursor can false-accept it. Symlink node into the stub bin.
     const binDir = path.join(stubDir, 'bin');
     fs.mkdirSync(binDir);
     const gitBin = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
     fs.symlinkSync(gitBin, path.join(binDir, 'git'));
-    process.env.PATH = [binDir, path.dirname(process.execPath)].join(path.delimiter);
+    fs.symlinkSync(process.execPath, path.join(binDir, 'node'));
+    const isolatedPath = binDir;
+    process.env.PATH = isolatedPath;
     try {
       const file = writeDef({
         name: 'no-cursor',
@@ -422,7 +426,11 @@ exit 1
         phases: [phase({ force: true })],
       });
       const loop = require('../lib/loop');
-      const env = enforcedEnv({ PATH: process.env.PATH });
+      const env = enforcedEnv({ PATH: isolatedPath });
+      // Host may export AGENTFLEET_*_BIN; clear so resolve cannot bypass PATH.
+      delete env.AGENTFLEET_CURSOR_BIN;
+      delete env.AGENTFLEET_COPILOT_BIN;
+      delete env.AGENTFLEET_OPENCODE_BIN;
       const dry = await loop.runFromFile(file, { env, checkWorkdir: true, dryRun: true });
       assert.equal(dry.ok, true, JSON.stringify(dry));
       assert.match((dry.warnings || []).join('\n'), /cursor-agent not on PATH/);
