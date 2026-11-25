@@ -18,17 +18,13 @@
   "phases": [
     {
       "id": "m0",
-      "session": "hello-aflt-m0",
-      "promptFile": "prompts/M0.txt",
+      "type": "script",
       "eval": {
         "command": ["node", "seed-m0.js"],
         "exitCode": 0,
         "timeoutSec": 120
       },
-      "maxFixAttempts": 2,
-      "onPass": "commit",
-      "force": true,
-      "timeoutSec": 900
+      "onPass": "commit"
     },
     {
       "id": "m1",

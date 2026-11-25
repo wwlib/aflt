@@ -1,0 +1,25 @@
+Do not switch to plan mode.
+Never use pkill/killall or pattern-matched kills; only stop PIDs you started.
+Read SPEC.md, README.md, AGENTS.md, and existing files in src/ and test/ first. Everything in this repo was written by agents in earlier milestones (there is no seed code); build on what is actually there.
+Work only inside this repo; do not look for templates or other tile-dungeon repos on disk.
+You are building Milestone 2 (M2) of tile-dungeon: Procedural Dungeon Generation and Field of View / Fog of War.
+
+Requirements for M2:
+1. Procedural dungeon generator in src/dungeon.js (or src/map-gen.js) using src/rng.js:
+   - Deterministic seeded generation (rooms + corridors or BSP) producing rooms carved into a wall grid, connected by corridors, a valid player spawn tile, and a stairs/exit tile in a distant room.
+   - Guarantee connectivity of all carved floor tiles / rooms from player spawn (e.g. corridor carving + connectivity verification).
+2. Field of View (FOV) and Fog of War in src/fov.js and integrated into src/game-state.js:
+   - Compute currently visible tiles from player position with wall occlusion (shadowcasting or raycasting/Bresenham LOS).
+   - Track three visibility states per tile: unseen, explored (previously seen, currently out of sight), and visible (currently in FOV).
+   - Update FOV whenever the game starts or the player moves.
+3. Canvas rendering & UI updates in src/renderer.js, src/main.js, and public/index.html:
+   - Render unseen tiles as dark/hidden, explored tiles dimmed, and currently visible tiles bright/clear, including the exit/stairs tile when seen.
+   - Allow starting a new seeded dungeon (e.g. New Seed button or key) and display current seed/explored count in the HUD.
+4. Headless node:test tests in test/:
+   - Test deterministic dungeon generation from identical seeds.
+   - Test FOV occlusion (walls block sight beyond them) and fog-of-war explored memory as the player moves.
+   - Test across at least 50 different seeds that EVERY generated dungeon has valid floor spawn, valid stairs tile, and 100% BFS/flood-fill connectivity/solvability from player spawn to stairs and all rooms.
+5. Update README.md and AGENTS.md with the M2 dungeon/FOV modules.
+6. Run the package.json test script (node --test test/*.test.js) until fully green.
+
+Do not commit.

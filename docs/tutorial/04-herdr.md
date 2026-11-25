@@ -24,6 +24,8 @@ aflt labels terminals with `af_id=<id>`, and (by default) `herdr.space` / `herdr
 
 The panel lists tracked sessions (via `aflt ls --json --all`), shows lifecycle and live runtime, and focuses / adopts / resumes on click. It is read-only for done/delete/rename.
 
+**aflt spaces in the panel:** the header shows the current aflt space (“default ▾” or a space name). Click it to pick “default” or any space from `aflt space ls`; the panel then runs `aflt --space <name> ls|resume|adopt …`. The pick is remembered across Herdr restarts (the mod's `localStorage`), and a space that is later removed falls back to default with a toast. See [11 — Spaces](11-spaces.md).
+
 **Do not** dock the mod into Herdr’s shipped `main` layout — switch to the `af` layout instead.
 
 ## Install (high level)

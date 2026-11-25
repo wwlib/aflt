@@ -19,6 +19,7 @@ describe('named spaces', () => {
   let prevAfHome;
   let prevSpace;
   let prevNotify;
+  let prevProbe;
 
   beforeEach(() => {
     prevHome = process.env.HOME;
@@ -30,11 +31,16 @@ describe('named spaces', () => {
     delete process.env.AGENTFLEET_HOME;
     delete process.env.AFLT_SPACE;
     delete process.env.AFLT_NOTIFY_URL;
+    // Exact port numbers below: skip the live listening-port probe (covered in space-ports.test.js).
+    prevProbe = process.env.AFLT_NO_PORT_PROBE;
+    process.env.AFLT_NO_PORT_PROBE = '1';
     util.resetSpaceSelection();
   });
 
   afterEach(() => {
     util.resetSpaceSelection();
+    if (prevProbe === undefined) delete process.env.AFLT_NO_PORT_PROBE;
+    else process.env.AFLT_NO_PORT_PROBE = prevProbe;
     fs.rmSync(home, { recursive: true, force: true });
     if (prevHome === undefined) delete process.env.HOME;
     else process.env.HOME = prevHome;
@@ -170,6 +176,11 @@ describe('named spaces', () => {
     assert.equal(lj.default.current, true);
     assert.equal(lj.spaces.length, 1);
     assert.equal(lj.spaces[0].name, 'lab');
+
+    // `space ls` is an alias of `space list` (the Herdr af sessions picker uses it).
+    const ls = af(['space', 'ls', '--json'], { AGENTFLEET_HOME: null });
+    assert.equal(ls.status, 0, ls.stderr);
+    assert.deepEqual(JSON.parse(ls.stdout), lj);
 
     const curDefault = af(['space', 'current'], { AGENTFLEET_HOME: null });
     assert.equal(curDefault.status, 0);

@@ -403,4 +403,5 @@ module.exports = {
   startInProcessDashboard,
   runDashboardApiChecks,
   stopChild,
+  waitForServeJson,
 };

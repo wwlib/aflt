@@ -1,13 +1,40 @@
 {
   "name": "self-improve",
   "project": "aflt",
-  "cwd": ".",
-  "engine": "cursor",
-  "goal": "Improve aflt's deterministic eval score with small, tested fixes. Never lower the baseline score. Never edit eval/RUBRIC.md or scripts/eval/score.js / scripts/eval/rubric.js.",
-  "acceptance": "After at most 3 improve rounds (or earlier on score plateau): full suite green, score >= baseline, RUBRIC GUARD clean. Stop when aflt eval plateau reports stop=true.",
+  "cwd": "~/tmp/aflt-self",
+  "engines": ["copilot", "cursor", "opencode"],
+  "workdir": { "mode": "worktree", "base": "main" },
+  "protected": {
+    "source": "base",
+    "paths": [
+      "eval/RUBRIC.md",
+      "scripts/eval/**",
+      "examples/loops/hello-aflt/improve-gate.js",
+      "examples/loops/hello-aflt/prompts/**",
+      "examples/loops/self-improve.json"
+    ]
+  },
+  "verify": {
+    "tier1": { "command": ["npm", "test"], "timeoutSec": 7200 },
+    "tier2": {
+      "loop": "examples/loops/hello-eval.json",
+      "timeoutSec": 600,
+      "snapshot": true
+    },
+    "tier3": { "tileDungeon": true, "trials": 2, "timeoutSec": 3600 },
+    "dashboard": { "every": "tier", "snapshot": true }
+  },
+  "commitGate": {
+    "mode": "observe",
+    "trailer": "Verified-by",
+    "requireTiers": ["tier1"]
+  },
+  "escalation": { "afterFailedRounds": 3, "event": "loop.needs_human" },
+  "goal": "Improve aflt's deterministic eval score with small, tested fixes. Never lower the baseline score. Never edit protected eval harness paths (rubric, scripts/eval, improve-gate, self-improve.json).",
+  "acceptance": "After at most 3 improve rounds (or earlier on score plateau): full suite green, score >= baseline, RUBRIC GUARD clean, cheap-first verify tiers pass where configured. Stop when aflt eval plateau reports stop=true.",
   "plannedPhaseGate": "none",
   "allow": {
-    "commit": false,
+    "commit": true,
     "merge": false,
     "push": false
   },
@@ -18,8 +45,21 @@
   },
   "phases": [
     {
+      "id": "preflight",
+      "session": "loop-self-improve",
+      "prompt": "Do not edit any files. Do not switch to plan mode. Do not commit. The eval step runs `aflt doctor --strict` from the loop worktree. Reply with the single word READY.",
+      "eval": {
+        "command": ["node", "./bin/af.js", "doctor", "--strict"],
+        "exitCode": 0
+      },
+      "maxFixAttempts": 0,
+      "onPass": "none",
+      "force": false,
+      "verify": false,
+      "timeoutSec": 600
+    },
+    {
       "id": "measure",
-      "engine": "cursor",
       "session": "loop-self-improve",
       "prompt": "Do not edit any files. Do not switch to plan mode. Do not commit. The eval step runs hermetic `aflt eval measure`. Reply with the single word READY.",
       "eval": {
@@ -29,11 +69,11 @@
       "maxFixAttempts": 1,
       "onPass": "none",
       "force": false,
+      "verify": false,
       "timeoutSec": 7200
     },
     {
       "id": "score-baseline",
-      "engine": "cursor",
       "session": "loop-self-improve",
       "prompt": "Do not edit any files. Do not switch to plan mode. Do not commit. The eval step scores the latest measure results and writes the improve baseline (eval/improve-baseline.json, maxRounds=3). Reply with the single word READY.",
       "eval": {
@@ -53,17 +93,18 @@
       "maxFixAttempts": 1,
       "onPass": "none",
       "force": false,
+      "verify": false,
       "timeoutSec": 600
     },
     {
       "id": "plan-next",
       "type": "plan-next",
-      "engine": "cursor",
       "session": "loop-self-improve-planner",
-      "prompt": "You are planning ONE improve round for aflt (self-improve loop).\n\nRead-only context (do not modify these):\n- Latest `aflt eval report` / eval/history.jsonl trend\n- Human-owned eval/RUBRIC.md (criteria + RUBRIC GUARD)\n- eval/improve-baseline.json (baseline overall + maxRounds)\n\nHard rules:\n1. Propose at most ONE small, highest-value fix that includes tests.\n2. Do NOT propose edits to eval/RUBRIC.md, scripts/eval/score.js, or scripts/eval/rubric.js.\n3. Do NOT switch to plan mode. Do not commit/push/merge unless a phase onPass + loop allow flags explicitly enable it (this autonomous profile keeps allow.* false and plannedPhaseGate none).\n4. Before proposing work, consider stopping: if `aflt eval plateau --json` would report stop=true (score plateau vs previous round/baseline, or rounds >= maxRounds, default 3), write { \"done\": true } and nothing else.\n\nWhen continuing, write phases that implement exactly one fix then re-measure/score/gate. Prefer this shape (adapt ids per round):\n1) build — implement the fix + tests (force true; eval: npm test or a focused node:test invocation; exitCode 0)\n2) remasure — prompt READY only; eval: [\"node\",\"./bin/af.js\",\"eval\",\"measure\",\"--json\"] (long timeout)\n3) rescore — prompt READY only; eval: [\"node\",\"./bin/af.js\",\"eval\",\"score\",\"--json\"]\n4) improve-gate — prompt READY only; eval: [\"node\",\"./bin/af.js\",\"eval\",\"gate\",\"--improve\",\"--baseline\",\"eval/improve-baseline.json\",\"--json\"] exitCode 0\n\nSet gate to \"none\" on planned phases (autonomous profile). Keep onPass \"none\" unless the human sets allow.commit/merge/push to true — then the improve-gate phase may use onPass \"commit\" or \"merge\".\n\nAfter a successful round, the runner returns here; either plan the next single fix or { \"done\": true } on plateau / max rounds / acceptance met.",
+      "prompt": "You are planning ONE improve round for aflt (self-improve loop).\n\nRead-only context (do not modify protected paths):\n- Latest `aflt eval report` / eval/history.jsonl trend\n- Human-owned eval/RUBRIC.md (criteria + RUBRIC GUARD)\n- eval/improve-baseline.json (baseline overall + maxRounds)\n- Loop definition verify tiers (cheap-first): tier1 npm test + dashboard on every tier; tier2 hello-eval smoke loop; tier3 tile-dungeon (2 trials) only on improve-gate\n\nHard rules:\n1. Propose at most ONE small, highest-value fix that includes tests.\n2. Do NOT propose edits to eval/RUBRIC.md, scripts/eval/**, examples/loops/hello-aflt/improve-gate.js, hello-aflt prompts, or examples/loops/self-improve.json.\n3. Do NOT switch to plan mode.\n4. Before proposing work, consider stopping: if `aflt eval plateau --json` would report stop=true (score plateau vs previous round/baseline, or rounds >= maxRounds, default 3), write { \"done\": true } and nothing else.\n\nWhen continuing, write phases that implement exactly one fix then re-measure/score/gate. Prefer this shape (adapt ids per round):\n1) build — implement the fix + tests (force true; eval: npm test or focused node:test; exitCode 0). Include verify override so tier3 does NOT run on build:\n   \"verify\": { \"tier3\": null }\n   (tier1 + tier2 still come from the loop definition.)\n2) remeasure — prompt READY only; eval measure; verify: false\n3) rescore — prompt READY only; eval score --json; verify: false\n4) improve-gate — prompt READY only; eval gate --improve; verify: false on eval, then tier3 only:\n   \"verify\": { \"tier1\": null, \"tier2\": null, \"tier3\": { \"tileDungeon\": true, \"trials\": 2 } }\n   onPass \"commit\" when the gate passes (loop allow.commit is true); commitGate observe stamps Verified-by.\n\nSet gate to \"none\" on planned phases (autonomous profile). Keep onPass \"none\" on measure/rescore; improve-gate may use onPass \"commit\".\n\nAfter a successful round, the runner returns here; either plan the next single fix or { \"done\": true } on plateau / max rounds / acceptance met.",
       "maxFixAttempts": 2,
       "onPass": "none",
-      "force": true
+      "force": true,
+      "verify": false
     }
   ]
 }

@@ -1,0 +1,32 @@
+Do not switch to plan mode.
+Never use pkill/killall or pattern-matched kills; only stop PIDs you started.
+Read SPEC.md, README.md, AGENTS.md, package.json, and existing files in src/ and test/ first. Everything in this repo was written by agents in earlier milestones (there is no seed code); build on what is actually there.
+You are building Milestone 5 setup (M5a) of tile-dungeon: a headless bot player and deterministic evaluation harness under scripts/eval/.
+
+Do not copy files from any other folder or repo, and do not search the disk for one. Implement the harness here. To keep scores comparable with the original tile-dungeon baseline, the scorer MUST use the same metric names, weights, and normalization constants given below. If you mention the browser game server, keep the default PORT 8792 (override via PORT); do not bind 8790 or 8791.
+
+Requirements for M5a:
+1. Create scripts/eval/bot.js:
+   - A pure, deterministic headless bot player that plays a full game from a given seed using src/game-state.js actions (no DOM).
+   - Bot strategy: explore unseen tiles using BFS/pathfinding, fight/engage monsters smartly, drink healing potions when HP is below a threshold, equip better weapons/armor from inventory, and descend stairs (>) toward deeper levels (target e.g. depth 5 or turn cap 800).
+   - Return detailed per-run telemetry: seed, crashed (bool), error, invalidState, stuck, finalDepth, maxDepth, turns, kills, damageTaken, damageDealt, potionsUsed, itemsCollected, gameOver, victory/targetReached, floorsVisited, floorsSolvable.
+2. Create scripts/eval/scorer.js (pure scoring formulas, no I/O) and scripts/eval/eval.js (CLI runner):
+   - Runs the bot across N seeded games (default N=20, seeds 1..20; configurable via --seeds N) plus a solvability check across generated floors.
+   - Computes 0-100 sub-scores and overall score as a weighted average. Use these exact constants:
+     * AVG_DEPTH_TARGET = 3.5 (avg maxDepth of 3.5 -> 100; proportional below)
+     * TURNS_HEALTHY_MIN = 120, TURNS_HEALTHY_GOOD = 400, TURNS_SHORT_DEATH = 20, TURNS_STALL_SOFT = 700
+     * WEIGHTS: crash_free 0.25, solvability 0.20, avg_depth 0.20, turns_survived 0.15, balance_sanity 0.20
+   - Metric formulas (clamp each to [0,100] and round to 1 decimal; overall is the weighted sum, also clamp-rounded to 1 decimal):
+     * crash_free: 100 if zero crashes, invalid states, and NaN-like telemetry across all runs; else 0 (0 if N=0).
+     * solvability: 100 * (floorsSolvable / floorsVisited), or 100 if no floors were visited.
+     * avg_depth: 100 * (average maxDepth / 3.5).
+     * turns_survived from average turns: <20 -> (avg/20)*35; 20-120 -> 35 + t*40; 120-400 -> 75 + t*25; 400-700 -> 100; >700 -> 100 - min(1,(avg-700)/100)*15. If more than 30% of runs are gameOver with turns < 20, multiply by 0.7.
+     * balance_sanity: mean of 7 checks, times 100: avgKills>1 (1) or >0 (0.5) else 0; avgDamageTaken>0; avgDamageDealt>0; avgItemsCollected>0.5 (1) or >0 (0.5) else 0; avgPotionsUsed>0 (1) else (0.5 if avgDamageTaken<2 else 0.25); depthAtLeast2Rate >=0.5 (1) or >=0.25 (0.6) or >0 (0.3) else 0; stuckRuns===0 (1) else max(0, 1 - stuckRuns/N).
+   - Outputs JSON with --json containing: overall, weakest (name of lowest-scoring metric), metrics (each 0-100), stats (raw averages), and runs summary.
+   - Supports --write to save eval/latest-score.json and append eval/history.jsonl.
+3. Add an "eval" script to package.json: node scripts/eval/eval.js --json
+4. Add headless tests in test/eval.test.js verifying bot.js completes seeded runs cleanly and scorer/eval produces valid 0-100 bounded JSON metrics (keep test runtime fast, e.g. testing 3 seeds).
+5. Update README.md and AGENTS.md documenting scripts/eval/ and the package.json eval script.
+6. Run the package.json test script (node --test test/*.test.js) until fully green, then run node scripts/eval/eval.js --json --write so eval/history.jsonl has a baseline score.
+
+Do not commit.

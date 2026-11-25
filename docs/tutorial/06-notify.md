@@ -34,6 +34,8 @@ From `lib/notify.js` / USAGE:
 | `loop.phase.started` / `loop.phase.passed` / `loop.phase.failed` | Phase lifecycle |
 | `loop.completed` / `loop.failed` / `loop.stopped` | Loop terminal states |
 | `loop.gate.waiting` / `loop.gate.approved` | Approval gates |
+| `loop.needs_human` | Loop paused for human attention (`escalation` in the definition); also emits `loop.gate.waiting` with the same diagnostic bundle |
+| `loop.engine.failover` | A phase switched to the next engine in `engines` after an infrastructure error (`engine`, `fromEngine`, `errorKind`) |
 | `loop.heartbeat` | Opt-in interval (`loop.heartbeatSeconds` / `AFLT_LOOP_HEARTBEAT_SECONDS`; default off) |
 
 Payload fields include `event`, `sessionId`, `title`, `project`, `engine`, redacted `cwd`, `exitStatus`, `timestamp`, redacted `summary`, plus loop fields when relevant. Short HTTP timeout; failures log to stderr and never break the run. Headless `aflt run` / loop paths flush pending notifies before exit.

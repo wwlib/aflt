@@ -1,0 +1,26 @@
+Do not switch to plan mode.
+Never use pkill/killall or pattern-matched kills; only stop PIDs you started.
+Read SPEC.md, README.md, AGENTS.md, and existing files in src/ and test/ first. Everything in this repo was written by agents in earlier milestones (there is no seed code); build on what is actually there.
+Work only inside this repo; do not look for templates or other tile-dungeon repos on disk.
+You are building Milestone 4 (M4) of tile-dungeon: Items, Inventory, Stairs to Deeper Levels, and Difficulty Scaling.
+
+Requirements for M4:
+1. Items and Equipment in src/items.js (or src/game-state.js):
+   - Healing potions (restore HP), weapons (increase attack power), and armor (increase defense / reduce incoming damage), with seeded generation across rooms.
+   - Stepping onto an item picks it up (or explicit pickup + auto-pickup option) into a bounded inventory.
+   - Pure inventory actions: useItem(state, index) / equipItem(state, index) consuming potions or equipping stronger weapons/armor.
+   - Keyboard shortcuts (e.g. 1-9 to use/equip slot, H to drink best healing potion, G to pick up if manual) and clickable inventory panel in browser UI.
+2. Stairs Down & Multi-level Progression:
+   - Track dungeon depth (starting at depth 1) in pure game state.
+   - Stepping onto the stairs-down tile (or pressing > / Enter on stairs, or clicking Descend) generates floor depth + 1 deterministically from the run seed and depth, preserving player HP, maxHp, inventory, equipped gear, kills, and turn count.
+3. Difficulty Scaling:
+   - Deeper floors spawn stronger/more monsters and higher-tier potions/weapons/armor so depth 1 is approachable and deeper floors scale steadily.
+4. UI & Rendering updates:
+   - Render items on visible/explored tiles cleanly, show stairs clearly, and display Depth, HP, ATK, DEF, Equipped Weapon/Armor, and Inventory in the HUD/sidebar.
+5. Headless node:test tests in test/:
+   - Test item spawning, pickup into inventory, drinking healing potions (capped at maxHp), and equipping weapons/armor affecting combat stats.
+   - Test descending stairs increments depth, generates a new connected floor, preserves player state, and scales monster/item difficulty across depths.
+6. Update README.md and AGENTS.md for M4.
+7. Run the package.json test script (node --test test/*.test.js) until fully green.
+
+Do not commit.

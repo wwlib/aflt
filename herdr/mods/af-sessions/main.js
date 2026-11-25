@@ -3,6 +3,16 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { exec, home, spaces, focused, run, theme, notify } from "herdr";
+import {
+  afltSpaceLabel,
+  afltSpaceOptions,
+  loadAfltSpace,
+  normalizeAfltSpace,
+  parseAfltSpaceList,
+  resolveAfltSpace,
+  saveAfltSpace,
+  withAfltSpace,
+} from "./afspace.js";
 
 const REFRESH_MS = 8000;
 const EXEC_TIMEOUT = 20000;
@@ -98,6 +108,15 @@ async function execAf(args, timeout = EXEC_TIMEOUT) {
   }
 }
 
+/** Herdr's per-mod localStorage (data/af-sessions/store.json), when present. */
+function panelStorage() {
+  try {
+    return typeof localStorage !== "undefined" ? localStorage : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function parseLsJson(text) {
   try {
     const data = JSON.parse(text);
@@ -129,18 +148,79 @@ export default class AfSessions extends View {
     this.refreshing = false;
     this.starting = {}; // title -> true while resume in flight / polling
     this.pollTask = null;
+    // aflt space (named AgentFleet home), not a Herdr space. null = default.
+    this.afltSpace = loadAfltSpace(panelStorage());
+    this.afltSpaceNames = [];
+    this.afltSpacePickerOpen = false;
+    this.refreshAgain = false;
     cx.timer.every(REFRESH_MS, (cx) => this.refresh(cx));
     this.refresh(cx);
+  }
+
+  /** Run aflt in the selected aflt space (every panel command goes through here). */
+  af(args, timeout = EXEC_TIMEOUT, afltSpace = this.afltSpace) {
+    return execAf(withAfltSpace(args, afltSpace), timeout);
+  }
+
+  /** Refresh the aflt space list; fall back to default if the pick vanished. */
+  async refreshAfltSpaces() {
+    let r;
+    try {
+      r = await execAf(["space", "ls", "--json"], EXEC_TIMEOUT);
+    } catch (_) {
+      return;
+    }
+    if (!r || r.code !== 0) return; // keep the last list; ls will report errors
+    const parsed = parseAfltSpaceList(r.stdout || "");
+    if (parsed.error) return;
+    this.afltSpaceNames = parsed.names;
+    const { space, missing } = resolveAfltSpace(this.afltSpace, parsed.names);
+    if (missing) {
+      const gone = this.afltSpace;
+      this.setAfltSpace(space);
+      notify({
+        title: "af sessions",
+        body: `aflt space "${gone}" no longer exists; showing default.`,
+        level: "warning",
+      });
+    }
+  }
+
+  setAfltSpace(name) {
+    const next = normalizeAfltSpace(name);
+    this.afltSpacePickerOpen = false;
+    if (next === this.afltSpace) return false;
+    this.afltSpace = next;
+    this.sessions = [];
+    this.error = null;
+    this.starting = {};
+    saveAfltSpace(panelStorage(), next);
+    return true;
+  }
+
+  pickAfltSpace(name, cx) {
+    if (this.setAfltSpace(name)) {
+      // If a refresh is in flight, run another as soon as it finishes.
+      if (this.refreshing) this.refreshAgain = true;
+      else this.refresh(cx);
+    }
+    cx.notify();
   }
 
   refresh(cx) {
     if (this.refreshing) return;
     this.refreshing = true;
+    this.refreshAgain = false;
     cx.notify();
     cx.spawn(async (cx) => {
+      await this.refreshAfltSpaces();
+      const afltSpace = this.afltSpace;
       try {
-        const r = await execAf(["ls", "--json", "--all"], EXEC_TIMEOUT);
-        if (r.code !== 0) {
+        const r = await this.af(["ls", "--json", "--all"], EXEC_TIMEOUT, afltSpace);
+        if (afltSpace !== this.afltSpace) {
+          // Picked another aflt space mid-flight: drop this result.
+          this.refreshAgain = true;
+        } else if (r.code !== 0) {
           const tail = String(r.stderr || r.stdout || `exit ${r.code}`).trim().slice(-200);
           this.error = tail || `aflt ls failed (${r.code})`;
           this.sessions = [];
@@ -152,7 +232,8 @@ export default class AfSessions extends View {
             this.sessions = [];
             this.queryOk = false;
           } else {
-            this.sessions = sortSessions(parsed.sessions);
+            // Tag rows with the aflt space they came from so clicks resume/adopt there.
+            this.sessions = sortSessions(parsed.sessions).map((row) => ({ ...row, afltSpace }));
             this.queryOk = parsed.queryOk;
             this.error = parsed.queryOk ? null : "herdr query failed";
           }
@@ -164,13 +245,14 @@ export default class AfSessions extends View {
       }
       this.refreshing = false;
       cx.notify();
+      if (this.refreshAgain) this.refresh(cx);
     });
   }
 
   async adoptAndFocus(row, cx) {
     const title = row.title;
     try {
-      const r = await execAf(["adopt", title], EXEC_TIMEOUT);
+      const r = await this.af(["adopt", title], EXEC_TIMEOUT, row.afltSpace);
       if (r.code !== 0) {
         notify({
           title: "aflt adopt failed",
@@ -249,7 +331,7 @@ export default class AfSessions extends View {
     cx.notify();
     cx.spawn(async (cx) => {
       try {
-        const r = await execAf(["resume", row.title, "--no-open"], RESUME_TIMEOUT);
+        const r = await this.af(["resume", row.title, "--no-open"], RESUME_TIMEOUT, row.afltSpace);
         if (r.code !== 0) {
           this.starting[row.title] = false;
           notify({
@@ -378,6 +460,70 @@ export default class AfSessions extends View {
       );
   }
 
+  /** Header control: current aflt space; click opens the picker. */
+  afltSpaceChip(t) {
+    const label = afltSpaceLabel(this.afltSpace);
+    return h_flex()
+      .id("af-space-chip")
+      .gap(3)
+      .px(6)
+      .h(18)
+      .min_w(0)
+      .rounded(5)
+      .items_center()
+      .text_size(11)
+      .text_color(this.afltSpace ? t.foreground : t.dim)
+      .when(this.afltSpacePickerOpen, (el) => el.bg(t.selected))
+      .hover((s) => s.bg(t.hover))
+      .cursor_pointer()
+      .tooltip(`aflt space: ${label} (click to switch)`)
+      .on_click((_e, cx) => {
+        this.afltSpacePickerOpen = !this.afltSpacePickerOpen;
+        cx.notify();
+      })
+      .child(div().min_w(0).truncate().child(truncate(label, 18)))
+      .child(div().flex_none().text_color(t.dim).child("▾"));
+  }
+
+  /** Inline list: default plus every `aflt space ls` name. */
+  afltSpacePicker(t) {
+    const opts = afltSpaceOptions(this.afltSpaceNames);
+    // Keep the current pick visible even before the first space list arrives.
+    if (this.afltSpace && !opts.includes(this.afltSpace)) opts.push(this.afltSpace);
+    return v_flex()
+      .id("af-space-picker")
+      .mx(8)
+      .mb(6)
+      .p(4)
+      .flex_none()
+      .max_h(220)
+      .overflow_y_scrollbar()
+      .rounded(8)
+      .border_1()
+      .border_color(t.border)
+      .bg(t.raised || t.chrome)
+      .children(
+        opts.map((name) => {
+          const current = name === this.afltSpace;
+          return h_flex()
+            .id(`af-space-opt-${name || "(default)"}`)
+            .h(24)
+            .px(8)
+            .gap(6)
+            .flex_none()
+            .rounded(6)
+            .items_center()
+            .text_size(11.5)
+            .when(current, (el) => el.bg(t.selected))
+            .hover((s) => s.bg(t.hover))
+            .cursor_pointer()
+            .on_click((_e, cx) => this.pickAfltSpace(name, cx))
+            .child(div().w(10).flex_none().text_color(t.accent || t.foreground).child(current ? "✓" : ""))
+            .child(div().min_w(0).flex_1().truncate().text_color(name ? t.foreground : t.dim).child(afltSpaceLabel(name)));
+        }),
+      );
+  }
+
   sectionHeader(label, t) {
     return h_flex()
       .px(8)
@@ -470,22 +616,36 @@ export default class AfSessions extends View {
                 ),
             )
             .child(
-              div()
-                .id("af-refresh")
-                .text_size(11)
-                .text_color(t.dim)
-                .hover((s) => s.text_color(t.foreground))
-                .tooltip("Refresh now")
-                .on_click((_e, cx) => this.refresh(cx))
-                .child("↻"),
+              h_flex()
+                .gap(8)
+                .items_center()
+                .min_w(0)
+                .child(this.afltSpaceChip(t))
+                .child(
+                  div()
+                    .id("af-refresh")
+                    .text_size(11)
+                    .text_color(t.dim)
+                    .hover((s) => s.text_color(t.foreground))
+                    .tooltip("Refresh now")
+                    .on_click((_e, cx) => this.refresh(cx))
+                    .child("↻"),
+                ),
             ),
         ),
       )
+      .when(this.afltSpacePickerOpen && !narrow, (el) => el.child(this.afltSpacePicker(t)))
       .when(Boolean(this.error) && !narrow, (el) =>
         el.child(div().px(12).pb(4).text_size(11).text_color(t.blocked || t.dim).child(truncate(this.error, 80))),
       )
       .when(list.length === 0 && !narrow && !this.error, (el) =>
-        el.child(div().px(12).text_size(12).text_color(t.dim).child("No af sessions.")),
+        el.child(
+          div()
+            .px(12)
+            .text_size(12)
+            .text_color(t.dim)
+            .child(this.afltSpace ? `No af sessions in space ${this.afltSpace}.` : "No af sessions."),
+        ),
       )
       .child(v_flex().id("af-list").flex_1().min_h(0).px(narrow ? 0 : 8).overflow_y_scrollbar().mode("always").children(rows));
   }

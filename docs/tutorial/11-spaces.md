@@ -4,6 +4,7 @@
 
 - Isolate a throwaway fleet with `--space` / `AFLT_SPACE`
 - Create, list, show current, and safely remove a space
+- Switch the Herdr af sessions panel between spaces
 - Know per-space home, port, LaunchAgent label, memory, and notify-off default
 - Leave default / no-space behavior unchanged when you omit `--space`
 
@@ -25,7 +26,7 @@ aflt <command> …
 ## Commands
 
 ```bash
-aflt space list [--json]
+aflt space list [--json]      # alias: aflt space ls
 aflt space create <name> [--json]
 aflt space current [--json]
 aflt space remove <name> [--force] [--json]
@@ -42,13 +43,15 @@ Text:
 ```text
 created space tutorial
   path: …/.agentfleet/spaces/tutorial
-  port: 8788          # first free ≥8788; 8787 reserved for default
+  port: 8788          # first free ≥8788 not recorded by a space and not listening now; 8787 reserved for default
   memoryRepo: …/.agentfleet/spaces/tutorial/memory
   service: dev.aflt.dashboard.tutorial
   notify: off
 ```
 
-JSON fields include `ok`, `name`, `path`, `port`, `memoryRepo`, `serviceLabel`, `notifyEnabled: false`.
+JSON fields include `ok`, `name`, `path`, `port`, `memoryRepo`, `serviceLabel`, `notifyEnabled: false`. Creating a name that already exists fails with `space already exists: <name> (…)`.
+
+Selecting a space with `--space` / `AFLT_SPACE` does not create its folder by itself; `space create` (or the first command that writes state) does.
 
 New space config records: unique dashboard port, `notify.enabled: false`, isolated `memoryRepo`, LaunchAgent label `dev.aflt.dashboard.<space>` (default label `dev.aflt.dashboard` unchanged).
 
@@ -71,9 +74,11 @@ tutorial
 
 Without a space selected, `space current` prints `(default)`.
 
+`aflt space ls` is an alias of `space list`. `aflt space ls --json` returns `{ current, default: { name: null, label: "(default)", path, current, port, serviceLabel }, spaces: [ { name, path, current, port, … } ] }` — the Herdr panel's space picker reads this.
+
 ### Remove (safe cleanup of this tutorial)
 
-`remove` refuses a non-empty space without `--force`. It **never** removes the default home.
+`remove` refuses a non-empty space without `--force`. It **never** removes the default home. A space made by `space create` already holds a `config.json`, so plain `remove` reports `space "tutorial" is not empty (has config or other files); pass --force to remove` and exits 1; use `--force` once you are sure.
 
 ```bash
 # After you are done with the throwaway tutorial space:
@@ -95,6 +100,8 @@ Only force-remove the **tutorial** (or other throwaway) space you created for th
 3. Run doctor / dry-runs / dashboard experiments there
 4. `aflt --space tutorial ls` / `orphans` / `loop status` as needed
 5. `aflt space remove tutorial --force` when finished
+
+In the Herdr **af sessions** panel, click the space name in the header (“default ▾”) to switch the panel to a named space (the panel lists them with `aflt space ls --json` and then passes `--space` on each command it runs; the pick survives Herdr restarts). See [04 — Herdr](04-herdr.md).
 
 ## Try it
 

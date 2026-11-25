@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Making of · aflt</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--panel2:#1e222b;--line:#2a2f3a;--text:#e6e8ee;--dim:#9aa3b2;--acc:#7cc4ff;--good:#7ee2a8;--warn:#f5c26b;--bad:#ff7b7b;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+a{color:var(--acc)}header{padding:14px 24px;border-bottom:1px solid var(--line);display:flex;gap:16px;align-items:center;flex-wrap:wrap;position:sticky;top:0;background:rgba(15,17,21,.96);z-index:5}
+h1{font-size:18px;margin:0}h2{font-size:15px;margin:26px 0 10px}h3{font-size:13px;margin:16px 0 6px;color:var(--acc)}main{padding:0 24px 60px;max-width:1300px;margin:0 auto}
+nav.toc{display:flex;gap:12px;flex-wrap:wrap;font-size:12px}
+select,input[type=search]{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit}
+input[type=search]{min-width:280px}.btn{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit}.btn:hover{border-color:var(--acc)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}.card .k{color:var(--dim);font-size:12px}.card .v{font-size:20px;font-weight:600;margin-top:2px}.card .s{color:var(--dim);font-size:11px}
+.note{color:var(--dim);font-size:12px;margin-top:8px}.pill{display:inline-block;padding:1px 7px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);font-size:11px;color:var(--dim);margin-right:4px}
+.pill.tool{color:var(--warn)}.pill.ph{color:var(--acc)}.pill.bad{color:var(--bad)}.pill.good{color:var(--good)}.pill.est{color:var(--warn);border-color:var(--warn)}
+.timeline{display:flex;height:40px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin-top:6px}
+.seg{display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;color:#0f1115;font-weight:600;overflow:hidden;white-space:nowrap;border-right:1px solid rgba(0,0,0,.35)}
+.seg:hover,.seg.on{filter:brightness(1.25);outline:2px solid #fff;outline-offset:-2px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:right;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}th:first-child,td:first-child{text-align:left}th{color:var(--dim);font-weight:500}tr.click{cursor:pointer}tr.click:hover{background:var(--panel)}
+td.l,th.l{text-align:left}.mono{font-family:var(--mono);font-size:12px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0}
+details.call{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin:8px 0}details.call[open]{border-color:#3b4556}
+details.call>summary{list-style:none;cursor:pointer;padding:10px 12px;display:grid;grid-template-columns:62px 110px 1fr auto;gap:10px;align-items:center}
+details.call>summary::-webkit-details-marker{display:none}.idx{font-family:var(--mono);color:var(--acc)}.when{color:var(--dim);font-size:12px}
+.snip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}.nums{font-family:var(--mono);font-size:12px;color:var(--dim);text-align:right;white-space:nowrap}.nums b{color:var(--good)}
+.body{padding:4px 14px 14px;border-top:1px solid var(--line)}.sec{margin-top:12px}.sec>.h{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin-bottom:6px}
+.item{background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin:6px 0}.item>.lbl{padding:6px 10px;font-size:12px;color:var(--dim);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
+pre{margin:0;padding:10px;white-space:pre-wrap;word-break:break-word;font:12px/1.45 var(--mono);max-height:520px;overflow:auto}
+pre.diff .a{color:var(--good)}pre.diff .d{color:var(--bad)}pre.diff .h{color:var(--acc)}
+details.sub>summary{cursor:pointer;padding:6px 10px;font-size:12px;color:var(--dim)}
+mark{background:#6b5a12;color:#fff}.phasehdr{margin:22px 0 4px;font-size:13px;color:var(--acc);font-weight:600;border-bottom:1px solid var(--line);padding-bottom:4px}
+.gaps li{margin:4px 0;color:var(--dim)}.small{font-size:12px;color:var(--dim)}
+:target{outline:2px solid var(--acc);outline-offset:2px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎬 Making of</h1>
+  <span id="runMeta" class="small"></span>
+  <span style="flex:1"></span>
+  <nav class="toc"><a href="#sec-calls">Calls</a><a href="#sec-commits">Commits</a><a href="#sec-artifacts">Artifacts</a><a href="#sec-gaps">What was recorded</a><span id="backLink"></span></nav>
+</header>
+<main>
+  <div id="cards" class="cards"></div>
+  <div id="pricing" class="note"></div>
+  <h2>Phase timeline <span class="small">(bar width = AI credits when recorded, otherwise calls; click a phase to filter)</span></h2>
+  <div id="timeline" class="timeline"></div>
+  <table id="phaseTbl" style="margin-top:10px"></table>
+  <h2 id="sec-calls">Every AI call, in order</h2>
+  <div class="controls">
+    <input id="q" type="search" placeholder="Search prompts, replies, tool calls and results…">
+    <select id="phSel"><option value="">All phases</option></select>
+    <select id="toolSel"><option value="">Any tool</option></select>
+    <label class="small"><input type="checkbox" id="onlyText"> Only calls with a text reply</label>
+    <label class="small"><input type="checkbox" id="onlyProduced"> Only calls that changed files</label>
+    <button class="btn" id="expand">Expand shown</button><button class="btn" id="collapse">Collapse all</button>
+    <span id="count" class="small"></span>
+  </div>
+  <div id="calls"></div>
+  <h2 id="sec-commits">Commits &amp; diffs</h2>
+  <div id="repoMeta" class="note"></div>
+  <div id="commits"></div>
+  <h3>Pull requests</h3>
+  <div id="prs" class="small"></div>
+  <h2 id="sec-artifacts">Artifacts</h2>
+  <div id="build"></div>
+  <h3>Seed inputs</h3>
+  <div id="seeds"></div>
+  <h3>Files created or changed, by phase</h3>
+  <div id="files"></div>
+  <h3>Eval outputs and reports</h3>
+  <div id="evals"></div>
+  <h2 id="sec-gaps">What was and wasn't recorded</h2>
+  <ul id="gaps" class="gaps"></ul>
+  <p class="small" id="gen"></p>
+</main>
+<script id="making-of-data" type="application/json">/*__MAKING_OF_DATA__*/</script>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>n==null?'–':Number(n).toLocaleString('en-US');
+const k=n=>n==null?'–':n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(1)+'k':String(n);
+const cr=n=>n==null?'–':Number(n).toFixed(n<10?2:1);
+const usd=n=>n==null?'–':'$'+Number(n).toFixed(n<1?3:2);
+// Viewer-local time with a short zone label (e.g. "Nov 24, 2:37:01 PM EST"); never a fixed zone.
+const LT=t=>{if(!t)return '';const d=new Date(t);return isNaN(d)?String(t):d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit',timeZoneName:'short'});};
+const dur=ms=>ms==null||isNaN(ms)?'–':ms<60000?(ms/1000).toFixed(1)+'s':(ms/60000).toFixed(1)+' min';
+const COLORS=['#7cc4ff','#7ee2a8','#f5c26b','#c39bff','#ff9f7b','#6fe0e0','#ffd36b','#a8b4ff','#ff8fc8','#b4e07e','#e0b46f'];
+const params=new URLSearchParams(location.search);
+const D=window.MAKING_OF_DATA||JSON.parse(document.getElementById('making-of-data').textContent);
+let toolMap=new Map(),hay=[],q='';
+const phaseOf=c=>D.phases.find(p=>p.runDir===c.runDir)||{};
+const phaseColor=new Map(D.phases.map((p,i)=>[p.phase,COLORS[i%COLORS.length]]));
+const commitBy=new Map((D.commits||[]).map(c=>[c.short,c]));
+const commitLink=s=>{const c=commitBy.get(s);return c?`<a class="mono" href="#commit-${esc(s)}">${esc(s)}</a>`:esc(s)};
+const callLink=i=>`<a class="mono" href="#call-${i}" onclick="openCall(${i})">#${i}</a>`;
+
+function init(){
+  document.title=`Making of · ${D.run.displayName||D.run.loop}`;
+  toolMap=new Map();D.calls.forEach(c=>c.toolCalls.forEach(t=>toolMap.set(t.id,{t,c})));
+  hay=D.calls.map(c=>[...c.input.map(i=>i.text||''),c.output.text,c.output.reasoning,...c.toolCalls.map(t=>t.name+' '+JSON.stringify(t.args)+' '+(t.result||'')+' '+(t.detail||''))].join('\n').toLowerCase());
+  if(D.links&&D.links.back)$('#backLink').innerHTML=`<a href="${esc(D.links.back)}">${esc(D.links.backLabel||'← back')}</a>`;
+  renderHead();renderPhases();renderFilters();
+  if(params.get('phase')){const p=D.phases.find(p=>p.phase===params.get('phase'));if(p)$('#phSel').value=p.runDir}
+  if(params.get('q'))$('#q').value=params.get('q');
+  renderCalls();renderCommits();renderArtifacts();
+  if(params.get('expand'))document.querySelectorAll('details.call').forEach(d=>{d.open=true;fillBody(d)});
+  $('#gaps').innerHTML=D.gaps.map(g=>`<li>${esc(g)}</li>`).join('');
+  $('#gen').textContent=`Generated ${LT(D.generatedAt)} by ${D.generator||'aflt making-of'} from ${D.fleetDir||''}`;
+  if(location.hash)setTimeout(()=>{const id=location.hash.slice(1);if(id.startsWith('call-'))openCall(+id.slice(5));else{const el=document.getElementById(id);if(el){if(el.tagName==='DETAILS')el.open=true;el.scrollIntoView()}}},0);
+}
+function openCall(i){const el=document.getElementById('call-'+i);if(!el){$('#phSel').value='';$('#q').value='';$('#toolSel').value='';$('#onlyText').checked=false;$('#onlyProduced').checked=false;renderCalls();}const d=document.getElementById('call-'+i);if(d){d.open=true;fillBody(d);d.scrollIntoView()}}
+function renderHead(){
+  const T=D.totals,r=D.run,cop=D.pricing.basis==='recorded';
+  $('#runMeta').innerHTML=`${esc(r.engine)} · <b>${esc(r.model)}</b> · loop ${esc(r.loop)} · status <span class="pill ${r.status==='failed'?'bad':r.status==='completed'?'good':''}">${esc(r.status)}</span> · ${esc(r.cwd||'')}`;
+  const c=(kk,v,s)=>`<div class="card"><div class="k">${kk}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:''}</div>`;
+  const A=T.aflt||{};
+  let h=c(cop?'AI calls (model requests)':'AI calls / steps',fmt(T.calls),cop?`${fmt(T.billedPrompts)} billed prompts`:'1 step = 1 assistant message when only a transcript was recorded')
+   +c('Tool calls',fmt(T.toolCalls))+c('Wall time',dur(T.durationMs))
+   +c('Commits',fmt((D.commits||[]).length),D.repo&&D.repo.github?'on GitHub':'local repo');
+  if(cop){h+=c('Input tokens',k(T.tokensIn),`${k(T.cacheRead)} cache read · ${k(T.cacheWrite)} cache write · ${k(T.uncachedIn)} uncached`)
+   +c('Output tokens',k(T.tokensOut),`${k(T.reasoning)} reasoning`)
+   +c('AI credits',cr(T.credits),`recorded on ${T.callsWithCost}/${T.calls} calls`)
+   +c('Cost',usd(T.usd),`credits × $${D.pricing.usdPerCredit}`);}
+  else h+=c('Input tokens (per phase)',k(A.totalInput),`aflt usage summary · ${esc(A.accuracy||'')}`)+c('Output tokens (per phase)',k(A.outputTokens))+c('Cost','n/a','not recorded; not estimated');
+  $('#cards').innerHTML=h;
+  let p=esc(D.pricing.text);
+  const O=T.afltOnDisk;
+  if(O&&A&&(O.totalTokens!==A.totalTokens||O.premiumRequests!==A.premiumRequests))p+=`<br>aflt usage summary (de-duplicated): ${k(A.totalTokens)} tokens${A.premiumRequests!=null?`, ${fmt(A.premiumRequests)} premium-request units`:''}. The usage-summary.json files written at run time say ${k(O.totalTokens)} tokens${O.premiumRequests!=null?` and ${fmt(O.premiumRequests)} units`:''}; those double-counted turns.`;
+  $('#pricing').innerHTML=p;
+}
+function phaseRow(p,i){
+  const t=p.totals||{},cc=p.codeChanges,A=p.usageSummary||{};
+  const status=p.status?`<span class="pill ${p.status==='failed'?'bad':p.status==='passed'?'good':''}">${esc(p.status)}</span>`:'';
+  const tokIn=t.tokensIn||A.totalInput,tokOut=t.tokensOut||A.outputTokens;
+  const est=!t.tokensIn&&A.accuracy&&A.accuracy!=='reported'?` <span class="pill est" title="some of these tokens are estimated">${esc(A.accuracy)}</span>`:'';
+  return `<tr class="click" data-ph="${esc(p.runDir)}"><td><span style="color:${COLORS[i%COLORS.length]}">■</span> ${esc(p.phase)} ${status}${p.type==='script'?' <span class="pill">script · no AI</span>':''}</td><td>${LT(p.start)}</td><td>${esc(p.recording||'')}</td><td>${fmt(t.calls)}</td><td>${fmt(t.toolCalls)}</td><td>${k(tokIn)}${est}</td><td>${k(tokOut)}</td><td>${cr(t.credits)}</td><td>${usd(t.usd)}</td><td>${dur(t.durationMs)}</td><td>${(p.commits||[]).map(commitLink).join(' ')||'–'}</td><td>${(p.files||[]).length} files${cc?` · +${cc.linesAdded}/−${cc.linesRemoved}`:''}</td></tr>`;
+}
+function renderPhases(){
+  const cop=D.pricing.basis==='recorded';
+  const w=p=>cop?(p.totals.credits||0):p.totals.calls;const tot=D.phases.reduce((a,p)=>a+w(p),0)||1;
+  $('#timeline').innerHTML=D.phases.map((p,i)=>`<div class="seg" data-ph="${esc(p.runDir)}" style="flex:${Math.max(w(p)/tot,0.02)};background:${COLORS[i%COLORS.length]}" title="${esc(p.phase)}: ${p.totals.calls} calls${cop?', '+cr(p.totals.credits)+' credits':''}">${esc(p.phase)}</div>`).join('');
+  document.querySelectorAll('.seg').forEach(s=>s.onclick=()=>{$('#phSel').value=$('#phSel').value===s.dataset.ph?'':s.dataset.ph;renderCalls()});
+  const T=D.totals,A=T.aflt||{};
+  $('#phaseTbl').innerHTML=`<thead><tr><th>Phase</th><th>Started</th><th>Recording</th><th>Calls</th><th>Tools</th><th>In tok</th><th>Out tok</th><th>Credits</th><th>$</th><th>Wall</th><th>Commits</th><th>Files</th></tr></thead><tbody>${D.phases.map(phaseRow).join('')}<tr><td><b>Whole run</b></td><td></td><td></td><td><b>${fmt(T.calls)}</b></td><td><b>${fmt(T.toolCalls)}</b></td><td><b>${k(T.tokensIn||A.totalInput)}</b></td><td><b>${k(T.tokensOut||A.outputTokens)}</b></td><td><b>${cr(T.credits)}</b></td><td><b>${usd(T.usd)}</b></td><td><b>${dur(T.durationMs)}</b></td><td><b>${(D.commits||[]).length}</b></td><td></td></tr></tbody>`;
+  document.querySelectorAll('#phaseTbl tr.click').forEach(r=>r.onclick=e=>{if(e.target.tagName==='A')return;$('#phSel').value=r.dataset.ph;renderCalls();$('#calls').scrollIntoView()});
+}
+function renderFilters(){
+  $('#phSel').innerHTML='<option value="">All phases</option>'+D.phases.filter(p=>p.totals.calls).map(p=>`<option value="${esc(p.runDir)}">${esc(p.phase)}</option>`).join('');
+  const tools=[...new Set(D.calls.flatMap(c=>c.toolCalls.map(t=>t.name)))].sort();
+  $('#toolSel').innerHTML='<option value="">Any tool</option>'+tools.map(t=>`<option>${esc(t)}</option>`).join('');
+}
+function visible(){
+  const ph=$('#phSel').value,tool=$('#toolSel').value,only=$('#onlyText').checked,prod=$('#onlyProduced').checked;q=$('#q').value.trim().toLowerCase();
+  return D.calls.filter((c,i)=>(!ph||c.runDir===ph)&&(!tool||c.toolCalls.some(t=>t.name===tool))&&(!only||c.output.text)&&(!prod||(c.produced||[]).length)&&(!q||hay[i].includes(q)));
+}
+function renderCalls(){
+  document.querySelectorAll('.seg').forEach(s=>s.classList.toggle('on',s.dataset.ph===$('#phSel').value));
+  const vs=visible();let last=null,h='';
+  for(const c of vs){
+    if(c.runDir!==last){const p=phaseOf(c);h+=`<div class="phasehdr">Phase ${esc(c.phase)} · ${p.totals.calls} ${c.step?'steps':'calls'}${p.totals.credits?' · '+cr(p.totals.credits)+' credits ('+usd(p.totals.usd)+')':''}${(p.commits||[]).length?' · commit '+p.commits.map(commitLink).join(' '):''}</div>`;last=c.runDir}
+    const snip=c.output.text||c.toolCalls.map(t=>t.intent||(t.args&&(t.args.description||t.args.command||t.args.path))||t.name).join(' · ')||c.output.reasoning||'';
+    const nums=c.tokens?`${k(c.tokens.in)} in · ${k(c.tokens.out)} out · <b>${cr(c.cost&&c.cost.credits)} cr</b> ${usd(c.cost&&c.cost.usd)}`:`<span title="${esc(c.costNote||'')}">no per-call usage</span>`;
+    const prod=(c.produced||[]).length?`<span class="pill good" title="${esc(c.produced.map(p=>p.path).join(', '))}">${c.produced.length} file${c.produced.length>1?'s':''}</span>`:'';
+    h+=`<details class="call" id="call-${c.index}" data-i="${c.index-1}"><summary><span class="idx">#${c.index}</span><span class="when">${c.timestamp?LT(c.timestamp).replace(/^\w+ \d+, /,''):esc(c.phase)}</span><span class="snip">${prod}${c.toolCalls.map(t=>`<span class="pill tool">${esc(t.name)}</span>`).join('')}${esc(String(snip).slice(0,220))}</span><span class="nums">${nums}</span></summary></details>`;
+  }
+  $('#calls').innerHTML=h||'<p class="small">No calls match.</p>';
+  $('#count').textContent=`${vs.length} of ${D.calls.length} shown`;
+  document.querySelectorAll('details.call').forEach(d=>d.addEventListener('toggle',()=>{if(d.open)fillBody(d)}));
+}
+function hl(s){s=esc(s);if(!q)return s;const re=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');return s.replace(re,m=>`<mark>${m}</mark>`)}
+function pre(s,cls=''){return `<pre class="${cls}">${hl(s)}</pre>`}
+function diff(s){return `<pre class="diff">${esc(s).split('\n').map(l=>l.startsWith('+')&&!l.startsWith('+++')?`<span class="a">${l}</span>`:l.startsWith('-')&&!l.startsWith('---')?`<span class="d">${l}</span>`:l.startsWith('@@')?`<span class="h">${l}</span>`:l).join('\n')}</pre>`}
+function item(lbl,inner,right=''){return `<div class="item"><div class="lbl"><span>${lbl}</span><span>${right}</span></div>${inner}</div>`}
+function fold(lbl,inner,open=false,id=''){return `<details class="sub item"${id?` id="${esc(id)}"`:''}${open?' open':''}><summary>${lbl}</summary>${inner}</details>`}
+function fmtArgs(a){
+  if(a==null)return pre('(no arguments)');
+  if(typeof a!=='object')return pre(String(a));
+  const short=[],long=[];
+  for(const [key,v] of Object.entries(a)){const str=typeof v==='string'?v:JSON.stringify(v,null,2);(str.includes('\n')||str.length>160?long:short).push([key,str])}
+  let h=short.length?pre(short.map(([key,v])=>key+': '+v).join('\n')):'';
+  for(const [key,v] of long)h+=`<div class="lbl" style="border-top:1px solid var(--line)"><span>${esc(key)} (${fmt(v.length)} chars)</span><span></span></div>`+pre(v);
+  return h;
+}
+function toolBlock(t,where){
+  let h=`<div class="item"><div class="lbl"><span><span class="pill tool">${esc(t.name)}</span> ${esc(t.intent||'')}</span><span>${t.success===false?'<span class="pill bad">failed</span>':''}${t.exitCode!=null?'exit '+t.exitCode:''} ${t.startedAt&&t.endedAt?dur(Date.parse(t.endedAt)-Date.parse(t.startedAt)):''}</span></div>${fmtArgs(t.args)}`;
+  if(where!=='argsOnly'){
+    if(t.result!=null)h+=fold(`Result the model saw (${fmt(String(t.result).length)} chars)`,pre(t.result),where==='input');
+    else h+=`<div class="small" style="padding:6px 10px">Result not recorded</div>`;
+    if(t.detail)h+=fold(`Diff/detail (${fmt(t.detail.length)} chars)`,diff(t.detail));
+  }
+  return h+'</div>';
+}
+function sysPrompt(p,ref){const ctx=p.context||{};const s=(ctx.systemPrompts||[])[ref??0];return s||''}
+function fillBody(d){
+  if(d.querySelector('.body'))return;
+  const c=D.calls[+d.dataset.i],p=phaseOf(c);
+  let h='<div class="body">';
+  h+=`<div class="small">${esc(c.engine)} · ${esc(c.model||'')} · ${c.timestamp?LT(c.timestamp):''}${c.latency?` · ${dur(c.latency.durationMs)} (first token ${dur(c.latency.ttftMs)})`:''}${c.finishReason?' · finish: '+esc(c.finishReason):''}${c.apiCallId?' · '+esc(String(c.apiCallId).slice(0,24))+'…':''}</div>`;
+  if((c.produced||[]).length)h+=`<div class="sec"><div class="h">Produced</div>${c.produced.map(x=>`<div class="small"><span class="mono">${esc(x.path)}</span> ${x.kind?'('+esc(x.kind)+')':''} → ${x.commit?'commit '+commitLink(x.commit):'<i>not in any commit</i>'}</div>`).join('')}</div>`;
+  h+='<div class="sec"><div class="h">Input: what was new in this request</div>';
+  if(!c.input.length)h+='<div class="small">Nothing new. This request continued straight from the previous reply.</div>';
+  for(const i of c.input){
+    if(i.type==='system'){const s=sysPrompt(p,i.ref);h+=fold(`System prompt (${fmt(s.length)} chars${p.context&&p.context.toolDefinitions&&p.context.toolDefinitions.tokens?`, plus ~${fmt(p.context.toolDefinitions.tokens)} tokens of tool definitions that weren't recorded`:''})`,pre(s));}
+    else if(i.type==='instruction')h+=fold(`Runtime instruction: ${esc(i.name||'')}`,pre(i.text));
+    else if(i.type==='user')h+=item('User prompt (sent by aflt)',pre(i.text),i.at?LT(i.at):'');
+    else if(i.type==='toolResult'){const m=toolMap.get(i.toolCallId);h+=m?fold(`Tool result from #${m.c.index}: ${esc(m.t.name)} ${esc(m.t.intent||'')} (${fmt(String(m.t.result||'').length)} chars)`,pre(m.t.result||'(empty)')):item('Tool result',pre('(unmatched)'));}
+    else h+=item(esc(i.type),pre(i.text||''));
+  }
+  h+='</div><div class="sec"><div class="h">Output: what the model returned</div>';
+  if(c.output.reasoning)h+=fold('Reasoning'+(c.output.reasoningEncrypted?' summary (the full reasoning is encrypted and wasn\'t stored)':''),pre(c.output.reasoning),true);
+  else if(c.output.reasoningEncrypted)h+='<div class="small">Reasoning is encrypted, with no summary.</div>';
+  if(c.output.text)h+=item('Reply text',pre(c.output.text));
+  for(const t of c.toolCalls)h+=toolBlock(t);
+  if(!c.output.text&&!c.toolCalls.length)h+='<div class="small">(empty)</div>';
+  h+='</div>';
+  if(c.tokens){const t=c.tokens;h+=`<div class="sec"><div class="h">Tokens &amp; cost</div><table><thead><tr><th>Token type</th><th>Tokens</th><th>Credits per 1M</th><th>Credits</th><th>$</th></tr></thead><tbody>`+
+    (c.cost&&c.cost.breakdown?c.cost.breakdown.map(b=>`<tr><td>${esc(b.type)}</td><td>${fmt(b.tokens)}</td><td>${fmt(b.creditsPerMTok)}</td><td>${b.credits==null?'–':b.credits.toFixed(3)}</td><td>${usd(b.credits==null?null:b.credits*(D.pricing.usdPerCredit||0.01))}</td></tr>`).join(''):'')+
+    `<tr><td><b>Total</b> (prompt ${fmt(t.in)} · output ${fmt(t.out)} · reasoning ${fmt(t.reasoning)} · tool definitions ${fmt(t.toolDefs)})</td><td></td><td></td><td><b>${cr(c.cost&&c.cost.credits)}</b></td><td><b>${usd(c.cost&&c.cost.usd)}</b></td></tr></tbody></table><div class="note">${esc(c.costBasis||c.costNote||'')}${c.cost&&c.cost.premiumRequestUnits!=null?` Premium-request units for this call: ${esc(c.cost.premiumRequestUnits)}.`:''}</div></div>`;}
+  else h+=`<div class="sec small">${esc(c.costNote||'No usage recorded for this call.')}</div>`;
+  if(c.engine==='copilot')h+=`<button class="btn ctx" style="margin-top:6px">Rebuild the full context window for this call</button><div class="ctxout"></div>`;
+  h+='</div>';d.insertAdjacentHTML('beforeend',h);
+  const b=d.querySelector('.ctx');if(b)b.onclick=()=>{d.querySelector('.ctxout').innerHTML=fullContext(c);b.remove()};
+}
+function fullContext(c){
+  const prev=D.calls.filter(x=>x.chatId===c.chatId&&x.runDir===c.runDir&&x.index<=c.index),p=phaseOf(c);
+  let h='<div class="note">Rebuilt from the session log in the order the model received it. Tool definitions aren\'t recorded.</div>';
+  for(const x of prev){
+    for(const i of x.input){
+      if(i.type==='system')h+=fold('[system] system prompt',pre(sysPrompt(p,i.ref)));
+      else if(i.type==='user')h+=fold('[user] '+esc((i.text||'').slice(0,90)),pre(i.text));
+      else if(i.type==='instruction')h+=fold('[system] '+esc(i.name||'instruction'),pre(i.text));
+      else if(i.type==='toolResult'){const m=toolMap.get(i.toolCallId);h+=fold(`[tool] ${esc(m?m.t.name:'?')} result from #${m?m.c.index:'?'}`,pre(m?m.t.result||'':''))}
+    }
+    if(x.index===c.index)break;
+    h+=fold(`[assistant #${x.index}] ${esc((x.output.text||x.toolCalls.map(t=>t.name).join(', ')).slice(0,90))}`,(x.output.text?pre(x.output.text):'')+x.toolCalls.map(t=>toolBlock(t,'argsOnly')).join(''));
+  }
+  return h;
+}
+// Links to a raw diff / file: --serve uses query routes, a static export uses fileMap.
+function diffHref(sha){const L=D.links||{};if(L.diffMap)return L.diffMap[sha]||'';return L.diffBase?L.diffBase+sha+(L.diffSuffix||''):'';}
+function fileHref(p){const L=D.links||{},R=D.repo||{};if(!p)return '';const abs=p.startsWith('/')||!R.path?p:R.path.replace(/\/$/,'')+'/'+p;if(L.fileMap)return L.fileMap[abs]||'';return L.fileBase?L.fileBase+encodeURIComponent(abs):'';}
+function fileLink(p,text){const h=fileHref(p);return h?`<a class="mono" href="${esc(h)}" target="_blank">${esc(text||p)}</a>`:`<span class="mono">${esc(text||p)}</span>`;}
+function renderCommits(){
+  const R=D.repo||{},C=D.commits||[];
+  $('#repoMeta').innerHTML=R.path?`Repo <span class="mono">${esc(R.path)}</span>${R.head?` · HEAD ${commitLink(R.head.slice(0,7))}`:''} · ${R.github?`GitHub <a href="${esc(R.github)}">${esc(R.github)}</a>`:R.remote?`remote ${esc(R.remote)}`:'no remote (local only), so diffs are embedded below'}${R.error?` · <span class="pill bad">${esc(R.error)}</span>`:''}`:'No repo recorded for this loop.';
+  if(!C.length){$('#commits').innerHTML='<p class="small">No commits.</p>';}
+  else $('#commits').innerHTML=`<table><thead><tr><th class="l">Commit</th><th class="l">Phase</th><th class="l">Message</th><th>Files</th><th>+/−</th><th class="l">Calls that produced it</th></tr></thead><tbody>${C.map(c=>{
+    const add=c.files.reduce((a,f)=>a+(f.added||0),0),rem=c.files.reduce((a,f)=>a+(f.removed||0),0);
+    return `<tr><td class="l"><a class="mono" href="#commit-${esc(c.short)}">${esc(c.short)}</a>${c.url?` <a href="${esc(c.url)}" class="small">GitHub</a>`:''}<div class="small">${LT(c.at)}</div></td><td class="l"><span class="pill ph" style="color:${phaseColor.get(c.phase)||'var(--dim)'}">${esc(c.phase||'—')}</span><div class="small">${esc(c.attribution||'')}</div></td><td class="l">${esc(c.subject)}</td><td>${c.files.length}</td><td class="mono">+${add} −${rem}</td><td class="l">${c.calls.slice(0,30).map(callLink).join(' ')}${c.calls.length>30?` +${c.calls.length-30} more`:''}</td></tr>`}).join('')}</tbody></table>`+
+    C.map(c=>fold(`<span class="mono">${esc(c.short)}</span> ${esc(c.subject)} — ${c.files.length} files`,
+      `<div style="padding:6px 10px" class="small">${esc(c.sha)} · ${esc(c.author)} · ${LT(c.at)}${diffHref(c.sha)?` · <a href="${esc(diffHref(c.sha))}" target="_blank">raw diff</a>`:''}${c.url?` · <a href="${esc(c.url)}">view on GitHub</a>`:''}</div>`+
+      `<table><tbody>${c.files.map(f=>`<tr><td class="l mono">${esc(f.status)} ${f.status==='D'?esc(f.path):fileLink(f.path)}${f.from?` (from ${esc(f.from)})`:''}</td><td class="mono">+${fmt(f.added)} −${fmt(f.removed)}</td></tr>`).join('')}</tbody></table>`+
+      (c.diff!=null?diff(c.diff)+(c.diffTruncated?`<div class="small" style="padding:6px 10px">Diff truncated (${fmt(c.diffBytes)} bytes total).</div>`:''):'<div class="small" style="padding:6px 10px">Diff not embedded.</div>'),false,'commit-'+c.short)).join('');
+  $('#prs').innerHTML=(D.prs||[]).length?D.prs.map(p=>`<div><a href="${esc(p.url)}">${esc(p.title||p.url)}</a></div>`).join(''):`None. ${esc(D.prsNote||'')}`;
+}
+function artifactFold(a,label){
+  const body=a.content!=null?pre(a.content)+(a.truncated?'<div class="small" style="padding:6px 10px">Truncated.</div>':''):'<div class="small" style="padding:6px 10px">Binary or unreadable; not embedded.</div>';
+  return fold(`<span class="mono">${esc(label||a.label)}</span> <span class="small">${fmt(a.bytes)} bytes · ${esc(a.path)}${fileHref(a.path)?` · <a href="${esc(fileHref(a.path))}" target="_blank">open</a>`:''}</span>`,body);
+}
+function renderArtifacts(){
+  const A=D.artifacts||{},R=D.repo||{};
+  let b='';
+  if(A.build)b+=`<p>🎮 Final build: <a href="${esc(A.build.url)}">${esc(A.build.label||A.build.url)}</a></p>`;
+  if(R.head)b+=`<p class="small">Final source: HEAD ${commitLink(R.head.slice(0,7))} in <span class="mono">${esc(R.path)}</span> (${fmt((R.finalTree||[]).length)} tracked files). Run it locally with <span class="mono">cd ${esc(R.path)} &amp;&amp; npm start</span>.</p>`+fold('Tracked files at HEAD',`<div style="padding:6px 10px;line-height:1.7">${(R.finalTree||[]).map(f=>fileLink(f)).join('<br>')}</div>`);
+  $('#build').innerHTML=b||'<p class="small">No build link recorded.</p>';
+  $('#seeds').innerHTML=(A.seeds||[]).length?`<p class="small">${A.seeds.length} seed files the loop copied in or ran without an AI call.</p>`+A.seeds.map(a=>artifactFold(a)).join(''):'<p class="small">No seed files found next to the loop definition.</p>';
+  $('#files').innerHTML=D.phases.filter(p=>(p.files||[]).length).map(p=>fold(`<b>${esc(p.phase)}</b> · ${p.files.length} files${(p.commits||[]).length?' · commit '+p.commits.join(' '):''}`,
+    `<table><thead><tr><th class="l">File</th><th>Status</th><th>+/−</th><th class="l">Commits</th><th class="l">Calls</th></tr></thead><tbody>${p.files.map(f=>`<tr><td class="l">${fileLink(f.path)}</td><td>${esc(f.status)}${f.uncommitted&&!f.commits.length?' <span class="pill est">not committed</span>':''}</td><td class="mono">${f.added==null?'–':'+'+f.added+' −'+f.removed}</td><td class="l">${f.commits.map(commitLink).join(' ')||'–'}</td><td class="l">${f.calls.slice(0,20).map(callLink).join(' ')}${f.calls.length>20?' …':''}</td></tr>`).join('')}</tbody></table>`,true)).join('')||'<p class="small">No file changes recorded.</p>';
+  let e='';
+  for(const p of D.phases){if(!p.lastEval)continue;const L=p.lastEval;e+=fold(`<b>${esc(p.phase)}</b> eval · exit ${esc(L.code)}${L.timedOut?' (timed out)':''} · ${LT(L.at)}`,(L.stdout?item('stdout',pre(L.stdout)):'')+(L.stderr?item('stderr',pre(L.stderr)):'')+(p.runLog?`<div class="small" style="padding:6px 10px">Agent run log: <span class="mono">${esc(p.runLog)}</span></div>`:''));}
+  for(const a of A.evalReports||[])e+=artifactFold(a,'report: '+a.label);
+  $('#evals').innerHTML=e||'<p class="small">No eval output recorded.</p>';
+}
+let tmr;$('#q').oninput=()=>{clearTimeout(tmr);tmr=setTimeout(renderCalls,200)};
+['#phSel','#toolSel','#onlyText','#onlyProduced'].forEach(s=>$(s).onchange=renderCalls);
+$('#expand').onclick=()=>{const ds=[...document.querySelectorAll('details.call')];if(ds.length>60&&!confirm(`Expand ${ds.length} calls?`))return;ds.forEach(d=>{d.open=true;fillBody(d)})};
+$('#collapse').onclick=()=>document.querySelectorAll('details.call').forEach(d=>d.open=false);
+try{init()}catch(e){$('#calls').innerHTML='<pre>'+esc(e.stack||e)+'</pre>'}
+</script>
+</body>
+</html>

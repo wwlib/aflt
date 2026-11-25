@@ -42,7 +42,7 @@ _af() {
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  cmds="version new add import ls list timeline projects dashboard memory sync run log spawn master docs children result wait tail send stop resume pick adopt cursor copilot opencode engine rename cwd set-cwd done rm remove purge orphans note export import-file which-backend setup herdr-templates herdr-app doctor msg inbox thread mcp help turns archive unarchive loop notify service space eval"
+  cmds="version new init add import ls list timeline projects dashboard making-of memory sync run log spawn master docs children result wait tail send stop resume pick adopt cursor copilot opencode engine rename cwd set-cwd done rm remove purge orphans note export import-file which-backend setup herdr-templates herdr-app doctor msg inbox thread mcp help turns archive unarchive loop notify service space eval"
 
   if [[ ${COMP_CWORD} -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "${cmds}" -- "${cur}") )
@@ -58,6 +58,9 @@ _af() {
       ;;
     new|add)
       COMPREPLY=( $(compgen -W "--cwd --prompt --model --tag --chat --engine --project --force --messaging --no-messaging --dry-run --no-trust cursor copilot opencode" -- "${cur}") )
+      ;;
+    init)
+      COMPREPLY=( $(compgen -W "--dir --space --no-space --engine --goal --stack --checks --budget-credits --budget-hours --yes --existing --isolated --force --json cursor copilot opencode" -- "${cur}") )
       ;;
     run)
       COMPREPLY=( $(compgen -W "--prompt --cwd --model --engine --project --mode --force --output-format --timeout --messaging --no-messaging --no-docs --dry-run --json --no-trust --no-silent cursor copilot opencode ask plan text json" -- "${cur}") )
@@ -236,6 +239,9 @@ _af() {
     dashboard)
       COMPREPLY=( $(compgen -W "--serve --port --host --snapshot --json --capture-completions --space" -- "${cur}") )
       ;;
+    making-of)
+      COMPREPLY=( $(compgen -W "--out --data --serve --port --host --build-url --build-label --seed --repo --no-diffs --with-files --json --space" -- "${cur}") )
+      ;;
     memory)
       if [[ ${COMP_CWORD} -eq 2 ]]; then
         COMPREPLY=( $(compgen -W "where init sync dashboard config refresh doc status" -- "${cur}") )
@@ -260,7 +266,9 @@ _af() {
       ;;
     loop)
       if [[ ${COMP_CWORD} -eq 2 ]]; then
-        COMPREPLY=( $(compgen -W "validate run start pause status stop resume approve" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "init validate run start pause status stop resume approve" -- "${cur}") )
+      elif [[ "${COMP_WORDS[2]}" == "init" ]]; then
+        COMPREPLY=( $(compgen -W "--engine --model --build-model --plan-model --out --dry-run --force --no-gate --no-dashboard --no-agents-pointer --budget-credits --budget-hours --isolated --json" -- "${cur}") )
       elif [[ "${COMP_WORDS[2]}" == "validate" || "${COMP_WORDS[2]}" == "start" ]]; then
         COMPREPLY=( $(compgen -W "--json" -- "${cur}") )
       elif [[ "${COMP_WORDS[2]}" == "run" ]]; then
@@ -268,7 +276,7 @@ _af() {
       elif [[ "${COMP_WORDS[2]}" == "status" || "${COMP_WORDS[2]}" == "stop" || "${COMP_WORDS[2]}" == "resume" || "${COMP_WORDS[2]}" == "pause" || "${COMP_WORDS[2]}" == "approve" ]]; then
         COMPREPLY=( $(compgen -W "--json --force" -- "${cur}") )
       else
-        COMPREPLY=( $(compgen -W "validate run start pause status stop resume approve --json --dry-run" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "init validate run start pause status stop resume approve --json --dry-run" -- "${cur}") )
       fi
       ;;
     service)
@@ -280,11 +288,11 @@ _af() {
       ;;
     space)
       if [[ ${COMP_CWORD} -eq 2 ]]; then
-        COMPREPLY=( $(compgen -W "list create current remove" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "list ls create current remove" -- "${cur}") )
       elif [[ "${COMP_WORDS[2]}" == "create" || "${COMP_WORDS[2]}" == "remove" ]]; then
         COMPREPLY=( $(compgen -W "--json --force --space" -- "${cur}") )
       else
-        COMPREPLY=( $(compgen -W "list create current remove --json --force --space" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "list ls create current remove --json --force --space" -- "${cur}") )
       fi
       ;;
     notify)

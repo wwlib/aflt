@@ -397,7 +397,10 @@ exit 1
     });
     assert.equal(result.ok, false);
     assert.doesNotMatch(fs.readFileSync(log, 'utf8'), /--model/);
-    assert.match(loop.loadState('model-nofallback').lastError || '', /agent exited 1/);
+    assert.match(
+      loop.loadState('model-nofallback').lastError || '',
+      /model_unavailable.*is not available/
+    );
   });
 
   it('refuses a live run with a clear message when the engine CLI is missing', async () => {
@@ -506,6 +509,84 @@ exit 1
     });
     assert.equal(repoRun.status, 1, repoRun.stdout);
     assert.match(repoRun.stderr, /aflt checkout|loop definition/);
+  });
+
+  it('tells the user how to fix a fresh non-git directory but stays strict', () => {
+    const loop = require('../lib/loop');
+    const inspection = loop._test.inspectLoopWorkdir(cwd);
+    assert.equal(inspection.ok, false);
+    const msg = inspection.problems.join('\n');
+    assert.match(msg, /is not a git repository/);
+    assert.match(msg, /git init/);
+    assert.match(msg, /--allow-existing/);
+
+    gitInit(cwd);
+    assert.equal(loop._test.inspectLoopWorkdir(cwd).ok, true);
+  });
+
+  it('grants Copilot plan-next the loop state dir and plan-next.json write rule', () => {
+    const loop = require('../lib/loop');
+    const copilot = require('../lib/copilot');
+    const def = { name: 'grant-loop' };
+    const dir = loop.loopDir('grant-loop');
+    const planFile = loop.planNextOutputPath('grant-loop');
+
+    const grants = loop.loopPhaseWriteGrants({ id: 'plan', type: 'plan-next' }, def);
+    assert.deepEqual(grants, { addDirs: [dir], allowWritePaths: [planFile] });
+    const none = loop.loopPhaseWriteGrants({ id: 'dev', type: 'run' }, def);
+    assert.deepEqual(none, { addDirs: [], allowWritePaths: [] });
+
+    const session = { cwd, chatId: 'abc', engine: 'copilot', result: path.join(home, 'results', 'x.md') };
+    const args = copilot.buildPrintArgs(session, { prompt: 'p', force: true, ...grants });
+    const addIdx = args.indexOf(dir);
+    assert.ok(addIdx > 0 && args[addIdx - 1] === '--add-dir', args.join(' '));
+    assert.ok(args.includes(`--allow-tool=write(${planFile})`), args.join(' '));
+    assert.ok(args.includes('--allow-all-tools'));
+    assert.ok(!args.includes('--allow-all-paths'));
+
+    const plain = copilot.buildPrintArgs(session, { prompt: 'p', ...none });
+    assert.ok(!plain.includes(dir));
+    assert.ok(!plain.some((a) => a.includes('plan-next.json')));
+  });
+
+  it('runSessionPrompt passes loop grants to the Copilot argv for plan-next only', async () => {
+    const stub = path.join(stubDir, 'copilot-stub.js');
+    const argvLog = path.join(stubDir, 'argv.jsonl');
+    fs.writeFileSync(
+      stub,
+      `#!/usr/bin/env node
+require('fs').appendFileSync(${JSON.stringify(argvLog)}, JSON.stringify(process.argv.slice(2)) + '\\n');
+process.stdout.write('{}\\n');
+`,
+      { mode: 0o755 }
+    );
+    process.env.AGENTFLEET_COPILOT_BIN = stub;
+    const loop = require('../lib/loop');
+    const registry = require('../lib/registry');
+    const def = { name: 'argv-loop', cwd };
+    const session = registry.add({
+      title: 'argv-s',
+      chatId: '11111111-1111-4111-8111-111111111111',
+      cwd,
+      engine: 'copilot',
+      status: 'active',
+      role: 'worker',
+    });
+    await loop.runSessionPrompt(session, 'plan it', { id: 'plan', type: 'plan-next', force: true, engine: 'copilot' }, { definition: def, env: process.env });
+    await loop.runSessionPrompt(session, 'do it', { id: 'dev', type: 'run', engine: 'copilot' }, { definition: def, env: process.env });
+    const runs = fs
+      .readFileSync(argvLog, 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+    assert.equal(runs.length, 2);
+    const dir = loop.loopDir('argv-loop');
+    const planFile = loop.planNextOutputPath('argv-loop');
+    const addDirs = runs[0].flatMap((a, i) => (runs[0][i - 1] === '--add-dir' ? [a] : []));
+    assert.ok(addDirs.includes(dir), runs[0].join(' '));
+    assert.ok(runs[0].includes(`--allow-tool=write(${planFile})`));
+    assert.ok(!runs[1].includes(`--allow-tool=write(${planFile})`));
+    assert.ok(!runs[1].includes(dir));
   });
 
   it('documents engines, the seed bind address, and loop run flags', () => {

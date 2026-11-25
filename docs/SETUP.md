@@ -573,6 +573,7 @@ Names are lowercased, sanitized to `[a-z0-9_-]`, truncated to 32 chars, and de-d
 ```bash
 hc server status && hc ls --json | head -c 200 && aflt ls
 aflt doctor
+aflt doctor --strict --port 8789   # preflight: engine CLIs, sign-in, notify, free port; exit 1 on a failed check
 ```
 
 Capability matrix: [CAPABILITIES.md](CAPABILITIES.md).

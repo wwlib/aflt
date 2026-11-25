@@ -1,9 +1,12 @@
 # aflt Self-Improving Loop Design
 
-A design for using aflt to improve aflt: an outer loop works in a separate worktree, every change passes cheap checks first and then a real tile-dungeon run, and the loop calls a human after three failed rounds. Design only; nothing here is built yet.
+A design for using aflt to improve aflt: an outer loop works in a separate worktree, every change passes cheap checks first and then a real tile-dungeon run, and the loop calls a human after three failed rounds.
 
 - **Date:** 2026-11-23
-- **Status:** Design proposal
+- **Status:** Design proposal; mostly implemented on branch `feat/self-improving-loop` (2026-11-24 note below)
+
+> [!NOTE]
+> **Implementation status (2026-11-24).** Built: `workdir.mode: "worktree"` (+ `--create-worktree`), `protected` paths with a base-commit diff guard, `aflt doctor --strict`, cheap-first `verify` tiers 1–3 (tile-dungeon runner with `trials`), tier checkpoints keyed by tree state, `commitGate` stamps (`observe` / `enforce`), `escalation` → `loop.needs_human`, and ordered `engines` failover; `examples/loops/self-improve.json` uses them (runbook: [self-improve-runbook.md](self-improve-runbook.md)). Not built yet: paired multi-trial acceptance with `minDelta` / `maxStdDev`, rule learning and the pruning routine, and running `commitGate` in `enforce` by default. The rest of this document is the original proposal.
 - **Target:** [`wwlib/aflt` PR #8](https://github.com/wwlib/aflt/pull/8)
 
 ## Contents

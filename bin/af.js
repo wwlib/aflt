@@ -34,6 +34,7 @@ const purgeLib = require('../lib/purge');
 const turns = require('../lib/turns');
 const notify = require('../lib/notify');
 const loopLib = require('../lib/loop');
+const doctorLib = require('../lib/doctor');
 const serviceLib = require('../lib/service');
 const spaceLib = require('../lib/space');
 const evalMeasure = require('../scripts/eval/measure');
@@ -88,6 +89,21 @@ Usage:
   aflt new "<title>" [--cwd DIR] [--prompt "..."] [--model X] [--engine cursor|copilot|opencode]
                             [--project NAME] [--force] [--messaging|--no-messaging]
                             [--tag T]... [--dry-run]
+  aflt init <name> [--dir PATH] [--space NAME | --no-space] [--engine cursor|copilot|opencode]
+                            [--goal TEXT] [--stack TEXT] [--checks TEXT]
+                            [--budget-credits N] [--budget-hours N] [--yes] [--existing]
+                            [--isolated] [--force] [--json]
+                            Start a looped project: folder (default ./<name>),
+                            git init, a space named after it (or --space), and
+                            starter SPEC.md / AGENTS.md / .agentfleet.json from a
+                            few plain questions (TTY) or flags (--yes). Existing
+                            docs are kept unless --force. Refuses a folder with
+                            files other than the seed docs unless --existing
+                            (or --force). Warns about anything outside the
+                            folder the engine could pick up (parent repo,
+                            parent/global AGENTS.md or rules, shared space or
+                            memory); --isolated turns those into errors.
+                            Next: aflt loop init.
   aflt add "<title>" --chat <id> [--cwd DIR] [--model X] [--engine cursor|copilot|opencode]
                             [--project NAME] [--tag T]... [--prompt "..."]
                             For --engine copilot, --chat is the Copilot session UUID
@@ -129,6 +145,21 @@ Usage:
                             --capture-completions: save registered Copilot Task Complete
                             events as project status notes in the configured memory repo.
                             Backfills existing events; no commits or Doc Bot launch.
+                            Loops tab: "Making of" opens /making-of/<loop>.
+  aflt making-of <loop> [--out file.html] [--data file.json] [--serve [--port 8797]]
+                            [--build-url URL] [--build-label TEXT] [--seed PATH[,PATH]]
+                            [--repo DIR] [--no-diffs] [--with-files] [--json]
+                            "Making of" page for one loop in this space: every AI call
+                            in order (prompt, reply, reasoning, tool calls + results,
+                            tokens, Copilot credits/$ as recorded), every commit in the
+                            loop's repo with phase, files and diff, and the artifacts
+                            (seed files, files per phase, eval outputs, final build).
+                            Self-contained HTML (default <space>/loops/<loop>/making-of.html).
+                            --serve serves it live (also at /making-of/<loop> under
+                            aflt dashboard --serve). --seed defaults to seed* / *-seed
+                            files next to the loop definition. --with-files also writes
+                            <out>-files/ (all commit diffs, seed/eval/tracked files as HTML) and
+                            links them, for hosting the page without aflt.
   aflt dashboard --snapshot <file.svg|html>
                             Write a standalone SVG or self-contained HTML snapshot
                             of the current activity graph (no server). Parent dirs
@@ -413,19 +444,43 @@ Usage:
                             Symlink (default) or copy the af-sessions Herdr panel
                             + af layout into ~/.config/herdr-app (or $HERDR_APP_HOME)
   aflt herdr-app status       Report linked/copied/missing for the panel + layout
-  aflt doctor [--json]
+  aflt doctor [--json] [--strict [--notify]] [--port N] [--loop <file>]
                             Read-only environment checks (hc, engines, home,
                             notify status, memory DOC-AGENT freshness — never
                             prints the notify key; outdated DOC-AGENT hints
-                            \`aflt memory config\`)
+                            \`aflt memory config\`). --strict adds preflight:
+                            engine CLIs on PATH (+ ~/.local/bin hint), engine
+                            sign-in probe (cursor runs \`cursor-agent status\`,
+                            copilot/opencode report "unknown (no probe)" warn),
+                            notify config (--notify: live round trip), a free
+                            ephemeral port, and exits 1 if any check fails
+                            (warnings never fail). --port N test-binds
+                            127.0.0.1:N and releases it. --loop <file> shows
+                            the loop workdir inspection and engine CLIs.
   aflt notify test [--json]
                             Send a sample notify webhook event (requires
                             config.json notify.url or AFLT_NOTIFY_URL)
+  aflt loop init [--engine E] [--model M | --build-model M --plan-model M]
+                            [--out .agentfleet/loop.json] [--dry-run] [--force]
+                            [--no-gate] [--no-dashboard] [--no-agents-pointer]
+                            [--budget-credits N] [--budget-hours N] [--isolated] [--json]
+                            Draft a loop from SPEC.md / AGENTS.md: the engine
+                            (headless) writes the loop JSON + prompts/ following
+                            templates/loop-guide.md (m0 builds tests + eval, a
+                            real check on every phase, gate after the first
+                            milestone, cheap build model / strong planner,
+                            budget caps, ≤3 improve rounds). The draft must pass
+                            loop validate and the checks policy; problems go
+                            back to the engine (up to 2 repairs). On success:
+                            phase summary, an aflt-loop section in AGENTS.md,
+                            and a copy under loops/definitions for the
+                            dashboard editor. Uses the space in .agentfleet.json.
+                            Prints isolation warnings; --isolated refuses.
   aflt loop validate <file> [--json]
                             Validate a loop definition JSON file (schema,
                             phases, eval, allow/onPass). Exit 1 on errors.
   aflt loop run <file> [--dry-run] [--json] [--fresh]
-                            [--force] [--allow-existing]
+                            [--force] [--allow-existing] [--create-worktree]
                             Run a multi-phase loop (plan→develop→eval→fix,
                             optional plan-next). Persists state under
                             $AGENTFLEET_HOME/loops/<name>/.
@@ -435,6 +490,10 @@ Usage:
                             aflt checkout or the definition, is refused (dry-run
                             still prints the plan, then exits 1).
                             --allow-existing overrides that folder check.
+                            workdir.mode "worktree" (definition key) instead
+                            accepts a clean non-empty git worktree that is not
+                            the running aflt checkout; --create-worktree runs
+                            \`git worktree add\` for a missing workdir.path.
                             --force grants full tool permissions for this run
                             (Cursor --force / Copilot --allow-all-tools).
                             Definitions default force to false; set force:true
@@ -445,6 +504,9 @@ Usage:
                             Model: phase.model, else definition.model, else
                             COPILOT_MODEL when the phase engine is copilot,
                             else config.json defaultModel (alias model).
+                            Improve rounds added by plan-next do not inherit the
+                            planner's model: they use plan-next improveModel,
+                            else definition improveModel, else the chain above.
   aflt loop start <file> [--json]
                             Register a loop as active for the dashboard
                             scheduler (does not run phases in this process).
@@ -452,7 +514,9 @@ Usage:
                             Pause an active/running loop (runner yields; stays
                             registered until stop).
   aflt loop status [name] [--json]
-                            Show one loop's state, or list all loops.
+                            Show one loop's state, or list all loops. A loop
+                            waiting at a gate shows the cost so far (credits /
+                            $ when recorded, active time, tokens).
   aflt loop stop <name> [--json]
                             Request stop (sets stopRequested; signals live runner).
   aflt loop resume <name> [--json]
@@ -470,7 +534,8 @@ Usage:
                             uses dev.aflt.dashboard.<space>. --print shows the
                             plist without writing. Unsupported on non-macOS.
                             Default --port comes from the space config when set.
-  aflt space list [--json]  List named spaces under ~/.agentfleet/spaces/ plus
+  aflt space list|ls [--json]
+                            List named spaces under ~/.agentfleet/spaces/ plus
                             the default (no-space) home; marks current.
   aflt space create <name> [--json]
                             Create ~/.agentfleet/spaces/<name> with a space-local
@@ -632,6 +697,9 @@ async function main() {
     case 'new':
       await cmdNew(rest);
       break;
+    case 'init':
+      await cmdInit(rest);
+      break;
     case 'run':
       await cmdRun(rest);
       break;
@@ -705,6 +773,9 @@ async function main() {
     case 'dashboard':
       await cmdDashboard(rest);
       break;
+    case 'making-of':
+      await cmdMakingOf(rest);
+      break;
     case 'turns':
       cmdTurns(rest);
       break;
@@ -773,7 +844,7 @@ async function main() {
       cmdSetup(rest);
       break;
     case 'doctor':
-      cmdDoctor(rest);
+      await cmdDoctor(rest);
       break;
     case 'notify':
       await cmdNotify(rest);
@@ -793,6 +864,192 @@ async function main() {
     default:
       fail(`unknown command: ${cmd}\n\n${USAGE}`);
   }
+}
+
+/**
+ * aflt init <name>: start a looped project (folder, git, space, starter
+ * SPEC.md / AGENTS.md / .agentfleet.json). Terminal-first; asks a few plain
+ * questions on a TTY unless --yes.
+ */
+async function cmdInit(argv) {
+  const { args, flags } = parseArgs(argv || []);
+  const positional = args.slice();
+  const asJson = recoverBoolFlag(flags, 'json', positional);
+  const yes = recoverBoolFlag(flags, 'yes', positional) || recoverBoolFlag(flags, 'y', positional);
+  const force = recoverBoolFlag(flags, 'force', positional);
+  const noSpace = recoverBoolFlag(flags, 'no-space', positional);
+  const existing = recoverBoolFlag(flags, 'existing', positional);
+  const isolated = recoverBoolFlag(flags, 'isolated', positional);
+  const usage =
+    'usage: aflt init <name> [--dir PATH] [--space NAME | --no-space] [--engine cursor|copilot|opencode]\n' +
+    '                 [--goal TEXT] [--stack TEXT] [--checks TEXT] [--budget-credits N] [--budget-hours N]\n' +
+    '                 [--yes] [--existing] [--isolated] [--force] [--json]';
+  if (flags.help || flags.h || positional[0] === 'help') {
+    process.stdout.write(usage + '\n');
+    return;
+  }
+  const name = positional[0];
+  if (!name) fail(usage, { json: asJson });
+  let engineName = null;
+  if (flags.engine) {
+    try {
+      engineName = config.validateEngine(String(flags.engine));
+    } catch (err) {
+      fail(err.message, { json: asJson });
+    }
+  }
+  const projectInit = require('../lib/project-init');
+  const answers = {
+    goal: typeof flags.goal === 'string' ? flags.goal : null,
+    stack: typeof flags.stack === 'string' ? flags.stack : null,
+    checks: typeof flags.checks === 'string' ? flags.checks : null,
+    budgetCredits: flags['budget-credits'] != null && flags['budget-credits'] !== true ? flags['budget-credits'] : null,
+    budgetHours: flags['budget-hours'] != null && flags['budget-hours'] !== true ? flags['budget-hours'] : null,
+  };
+  const dir = typeof flags.dir === 'string' ? path.resolve(flags.dir) : path.resolve(process.cwd(), require('../lib/loop-init').slugName(name));
+  const docsExist = fs.existsSync(path.join(dir, 'SPEC.md')) && fs.existsSync(path.join(dir, 'AGENTS.md'));
+  const interactive = !yes && !asJson && process.stdin.isTTY && (!docsExist || force);
+  if (interactive) {
+    await projectInit.askQuestions(answers);
+  }
+  let result;
+  try {
+    result = projectInit.initProject({
+      name,
+      dir,
+      space: noSpace ? false : currentSpaceName() || null,
+      engine: engineName,
+      ...answers,
+      force,
+      existing,
+      isolated,
+      currentSpace: currentSpaceName() || null,
+    });
+  } catch (err) {
+    fail(err.message || String(err), { json: asJson });
+  }
+  if (asJson) {
+    emitJson(result);
+    return;
+  }
+  const out = [];
+  out.push(`project ${result.project} in ${result.dir}${result.createdDir ? ' (new folder)' : ''}`);
+  out.push(`  git: ${result.git === 'initialized' ? 'initialized' : 'existing repo'}`);
+  if (result.space) {
+    out.push(`  space: ${result.space.name}${result.space.created ? ` (created, dashboard port ${result.space.port})` : ' (existing)'}`);
+  } else {
+    out.push('  space: (current)');
+  }
+  for (const f of result.files) {
+    out.push(`  ${f.action.padEnd(11)} ${path.relative(result.dir, f.path) || f.path}`);
+  }
+  if (result.isolation && result.isolation.ok) out.push('  isolation: ok (no parent repo, parent or global instructions, or shared space)');
+  for (const w of (result.isolation && result.isolation.warnings) || []) out.push(`  WARNING (isolation): ${w.message}`);
+  out.push('', 'next:');
+  for (const n of result.next) out.push(`  ${n}`);
+  process.stdout.write(out.join('\n') + '\n');
+}
+
+/** aflt loop init: draft .agentfleet/loop.json from SPEC.md / AGENTS.md. */
+async function cmdLoopInit(argvRest) {
+  const { args, flags } = parseArgs(argvRest || []);
+  const positional = args.slice();
+  const asJson = recoverBoolFlag(flags, 'json', positional);
+  const dryRun = recoverBoolFlag(flags, 'dry-run', positional);
+  const force = recoverBoolFlag(flags, 'force', positional);
+  const noDashboard = recoverBoolFlag(flags, 'no-dashboard', positional);
+  const noAgents = recoverBoolFlag(flags, 'no-agents-pointer', positional);
+  const noGate = recoverBoolFlag(flags, 'no-gate', positional);
+  const isolated = recoverBoolFlag(flags, 'isolated', positional);
+  const cwd = typeof flags.cwd === 'string' ? path.resolve(flags.cwd) : process.cwd();
+  const loopInit = require('../lib/loop-init');
+  // A project made by `aflt init` records its space; use it unless one was chosen.
+  if (!currentSpaceName() && !require('../lib/util').envNonEmpty(process.env, 'AGENTFLEET_HOME')) {
+    const pc = loopInit.readProjectConfig(cwd);
+    if (pc.space) {
+      try {
+        applySpaceSelection({ sawSpace: true, spaceFlag: String(pc.space), env: process.env });
+      } catch (err) {
+        fail(err.message || String(err), { json: asJson });
+      }
+    }
+  }
+  let engineName = null;
+  if (flags.engine) {
+    try {
+      engineName = config.validateEngine(String(flags.engine));
+    } catch (err) {
+      fail(err.message, { json: asJson });
+    }
+  }
+  const str = (k) => (typeof flags[k] === 'string' ? flags[k] : null);
+  const log = asJson ? () => {} : (m) => process.stderr.write(`${m}\n`);
+  let result;
+  try {
+    result = await loopInit.initLoop({
+      cwd,
+      engine: engineName,
+      model: str('model'),
+      buildModel: str('build-model'),
+      planModel: str('plan-model'),
+      out: str('out'),
+      dryRun,
+      force,
+      dashboard: !noDashboard,
+      agentsPointer: !noAgents,
+      gate: noGate ? false : undefined,
+      isolated,
+      budgetCredits: str('budget-credits'),
+      budgetHours: str('budget-hours'),
+      timeoutSec: str('timeout') ? Number(str('timeout')) : undefined,
+      maxRepairs: str('max-repairs') != null ? Number(str('max-repairs')) : undefined,
+      log,
+    });
+  } catch (err) {
+    fail(err.message || String(err), { json: asJson });
+  }
+  if (asJson) {
+    emitJson({ ...result, space: currentSpaceName() || null });
+    process.exitCode = result.ok ? 0 : 1;
+    return;
+  }
+  if (result.dryRun) {
+    process.stdout.write(
+      `dry-run: would ask ${result.engine} (build model ${result.models.build || 'default'}, plan model ${result.models.plan || 'default'}) to write ${result.outRel} and prompts in ${path.relative(result.cwd, result.promptsDir)}/\n` +
+        `prompt (${result.promptChars} chars):\n\n${result.prompt}\n`
+    );
+    return;
+  }
+  for (const w of (result.isolation && result.isolation.warnings) || []) {
+    process.stderr.write(`WARNING (isolation): ${w.message}\n`);
+  }
+  if (!result.ok) {
+    process.stderr.write(`loop init failed: ${result.error || 'the draft did not pass the checks'}\n`);
+    for (const e of result.errors || []) process.stderr.write(`  error: ${e}\n`);
+    if (result.attempts && result.attempts.length) {
+      process.stderr.write(`  (${result.attempts.length} attempt(s); draft left at ${result.out} for you to fix)\n`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+  const out = [];
+  out.push(`drafted ${result.outRel} (${result.attempts.length} attempt(s)); validated and checks policy ok`);
+  for (const line of result.summary) out.push(line);
+  for (const w of result.warnings || []) out.push(`WARNING: ${w}`);
+  if (result.usage) {
+    const u = result.usage;
+    const bits = [];
+    if (u.totalTokens != null) bits.push(`${u.totalTokens} tok`);
+    if (u.credits != null) bits.push(`${Number(u.credits).toFixed(2)} credits`);
+    if (u.usd != null) bits.push('$' + Number(u.usd).toFixed(2));
+    if (bits.length) out.push(`drafting cost: ${bits.join(' · ')}`);
+  }
+  if (result.agentsPointer) out.push(`AGENTS.md: ${result.agentsPointer.action} the aflt loop section`);
+  if (result.dashboardCopy) out.push(`dashboard copy: ${result.dashboardCopy}`);
+  const sp = currentSpaceName();
+  out.push('', 'next:');
+  for (const n of result.next) out.push(`  ${sp && n.startsWith('aflt ') ? n.replace(/^aflt /, `aflt --space ${sp} `) : n}`);
+  process.stdout.write(out.join('\n') + '\n');
 }
 
 async function cmdNew(argv) {
@@ -1500,6 +1757,138 @@ function cmdTimeline(argv) {
 /**
  * Live local activity dashboard. Background refreshes are read-only by default.
  */
+const MAKING_OF_USAGE =
+  'usage: aflt making-of <loop> [--out file.html] [--data file.json] [--serve [--port 8797] [--host 127.0.0.1]]\n' +
+  '                         [--build-url URL] [--build-label TEXT] [--seed PATH[,PATH...]] [--repo DIR]\n' +
+  '                         [--no-diffs] [--with-files] [--json]\n' +
+  '  --with-files  also write <out>-files/ (every commit diff + seed/eval/tracked files as small HTML pages) and link them,\n' +
+  '                for static hosting without aflt';
+
+/**
+ * aflt making-of <loop>: one self-contained HTML page with every AI call
+ * (prompt, reply, tool calls + results, tokens, cost), every commit with its
+ * diff, and the run's artifacts. Space-scoped like the dashboard.
+ */
+async function cmdMakingOf(argv) {
+  const makingOf = require('../lib/making-of');
+  const view = require('../lib/making-of-view');
+  const { expandUserPath } = require('../lib/util');
+  const { args, flags } = parseArgs(argv);
+  const asJson = recoverBoolFlag(flags, 'json', args);
+  const loopName = args[0];
+  if (!loopName || flags.help || flags.h) {
+    const names = makingOf.listLoopNames();
+    fail(
+      `${MAKING_OF_USAGE}${names.length ? `\nloops in this space: ${names.join(', ')}` : '\n(no loops in this space; set AFLT_SPACE or --space)'}`,
+      { json: asJson }
+    );
+  }
+  const strFlag = (name) => (flags[name] != null && flags[name] !== true ? String(flags[name]) : null);
+  const collectOpts = {
+    withDiffs: !flags['no-diffs'],
+    buildUrl: strFlag('build-url'),
+    buildLabel: strFlag('build-label'),
+    seeds: strFlag('seed')
+      ? strFlag('seed').split(',').map((s) => path.resolve(expandUserPath(s.trim()))).filter(Boolean)
+      : null,
+    repo: strFlag('repo') ? path.resolve(expandUserPath(strFlag('repo'))) : null,
+  };
+
+  if (flags.serve) {
+    const http = require('http');
+    const host = strFlag('host') || '127.0.0.1';
+    const port = strFlag('port') ? Number(strFlag('port')) : 8797;
+    if (!makingOf.listLoopNames().includes(loopName)) {
+      fail(`aflt making-of: no loop "${loopName}" in this space (${fleetDir()})`, { json: asJson });
+    }
+    const server = http.createServer((req, res) => {
+      const u = new URL(req.url || '/', `http://${host}`);
+      if (u.pathname === '/') {
+        res.writeHead(302, { Location: `/making-of/${encodeURIComponent(loopName)}` });
+        res.end();
+        return;
+      }
+      const handled = makingOf.handleMakingOfRequest(req, res, u.pathname, {
+        back: '/making-of',
+        backLabel: '← all loops',
+        collectOpts,
+      });
+      if (!handled) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('not found');
+      }
+    });
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, host, resolve);
+    });
+    const url = `http://${host}:${server.address().port}/making-of/${encodeURIComponent(loopName)}`;
+    if (asJson) emitJson({ ok: true, url, loop: loopName });
+    else process.stdout.write(`aflt making-of: serving ${url} (Ctrl-C to stop)\n`);
+    await new Promise((resolve) => {
+      const stop = () => server.close(() => resolve());
+      process.once('SIGINT', stop);
+      process.once('SIGTERM', stop);
+    });
+    return;
+  }
+
+  let data;
+  try {
+    data = makingOf.collectLoop(loopName, collectOpts);
+  } catch (err) {
+    fail(`aflt making-of: ${err.message || err}`, { json: asJson });
+  }
+  const outPath = strFlag('out')
+    ? path.resolve(expandUserPath(strFlag('out')))
+    : path.join(fleetDir(), 'loops', loopName, 'making-of.html');
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  let exported = null;
+  if (recoverBoolFlag(flags, 'with-files', args) || flags['with-files']) exported = makingOf.exportFiles(data, outPath);
+  fs.writeFileSync(outPath, view.renderHtml(data));
+  let dataPath = null;
+  if (strFlag('data')) {
+    dataPath = path.resolve(expandUserPath(strFlag('data')));
+    fs.mkdirSync(path.dirname(dataPath), { recursive: true });
+    fs.writeFileSync(dataPath, JSON.stringify(data));
+  }
+  const T = data.totals;
+  const summary = {
+    ok: true,
+    loop: loopName,
+    path: outPath,
+    data: dataPath,
+    engine: data.run.engine,
+    model: data.run.model,
+    phases: data.phases.length,
+    calls: T.calls,
+    toolCalls: T.toolCalls,
+    tokensIn: T.tokensIn || (T.aflt && T.aflt.totalInput) || null,
+    tokensOut: T.tokensOut || (T.aflt && T.aflt.outputTokens) || null,
+    credits: T.credits,
+    usd: T.usd,
+    costBasis: data.pricing.basis === 'recorded' ? 'recorded by Copilot' : 'not recorded',
+    billedPrompts: T.billedPrompts,
+    commits: data.commits.length,
+    seeds: data.artifacts.seeds.length,
+    prs: data.prs.length,
+    files: exported,
+  };
+  if (asJson) {
+    emitJson(summary);
+    return;
+  }
+  const money =
+    T.credits != null
+      ? ` · ${T.credits.toFixed(1)} credits ($${T.usd.toFixed(2)}, recorded by Copilot)`
+      : ' · cost not recorded';
+  process.stdout.write(
+    `${outPath}\n${data.run.engine || '?'} · ${data.run.model || '?'} · ${data.phases.length} phases · ` +
+      `${T.calls} AI calls · ${T.toolCalls} tool calls${money} · ${data.commits.length} commits\n` +
+      (exported ? `${exported.dir} (${exported.diffs} diffs, ${exported.files} files)\n` : '')
+  );
+}
+
 async function cmdDashboard(argv) {
   const { args, flags } = parseArgs(argv);
   const asJson = recoverBoolFlag(flags, 'json', args);
@@ -7490,9 +7879,14 @@ function cmpSemver(a, b) {
   return a.patch - b.patch;
 }
 
-function cmdDoctor(argv) {
+async function cmdDoctor(argv) {
   const { flags } = parseArgs(argv);
   const asJson = Boolean(flags.json);
+  const strict = Boolean(flags.strict);
+  if (flags.notify && !strict) fail('doctor: --notify requires --strict', { json: asJson });
+  for (const f of ['port', 'loop']) {
+    if (flags[f] === true) fail(`doctor: --${f} requires a value`, { json: asJson });
+  }
   const checks = [];
   function add(name, ok, detail) {
     checks.push({ name, ok: Boolean(ok), detail: detail || null });
@@ -7615,7 +8009,7 @@ function cmdDoctor(argv) {
     add('agent_docs', true, `status unavailable: ${err.message}`);
   }
   // copilot/hc optional for plain-only workflows — warn on old herdr-core but do not fail exit
-  const ok = checks
+  const legacyOk = checks
     .filter(
       (c) =>
         ![
@@ -7635,11 +8029,32 @@ function cmdDoctor(argv) {
         ].includes(c.name)
     )
     .every((c) => c.ok);
+  let ok = legacyOk;
+  let failed = [];
+  const extended = strict || flags.port != null || flags.loop != null;
+  if (extended) {
+    const pre = await doctorLib.runPreflightChecks({
+      strict,
+      notifyLive: Boolean(flags.notify),
+      port: flags.port,
+      loopFile: flags.loop ? String(flags.loop) : null,
+      env: process.env,
+    });
+    doctorLib.classifyLegacy(checks, pre.requiredEngines);
+    for (const c of pre.checks) {
+      checks.push({ name: c.name, ok: c.ok, status: c.status, detail: c.detail || null, ...(c.data ? { data: c.data } : {}) });
+    }
+    failed = checks.filter((c) => c.status === 'fail').map((c) => c.name);
+    // Strict mode fails on any failed check, including the advisory legacy rows that are required.
+    if (strict) ok = failed.length === 0;
+    else ok = legacyOk && !pre.checks.some((c) => c.status === 'fail');
+  }
   if (asJson) {
-    emitJson({ ok, checks });
+    emitJson({ ok, checks, ...(strict ? { strict: true, failed } : {}) });
   } else {
     for (const c of checks) {
-      process.stdout.write(`${c.ok ? 'ok ' : '!! '} ${c.name}: ${c.detail || ''}\n`);
+      const mark = c.ok ? 'ok ' : c.status === 'warn' ? 'warn' : '!! ';
+      process.stdout.write(`${mark} ${c.name}: ${c.detail || ''}\n`);
     }
     process.stdout.write(
       '\nHerdr smoke: hc server status && hc ls --json | head -c 200 && aflt ls\n'
@@ -7648,14 +8063,35 @@ function cmdDoctor(argv) {
   process.exitCode = ok ? 0 : 1;
 }
 
+function formatWorkdirLine(result) {
+  const wd = result.workdir;
+  if (!wd || wd.mode !== 'worktree') return '';
+  const bits = [
+    'mode=worktree',
+    `base=${wd.base || '-'}`,
+    `git=${wd.git}`,
+    `clean=${wd.clean}`,
+    `linked=${Boolean(wd.linkedWorktree)}`,
+    wd.ok ? 'ok' : 'refused',
+  ];
+  if (wd.created) bits.push(wd.created);
+  if (wd.createCommand) bits.push(`create: ${wd.createCommand}`);
+  return `  workdir: ${bits.join(' ')}\n`;
+}
+
 async function cmdLoop(argv) {
   const { args, flags } = parseArgs(argv || []);
   const sub = args[0];
   const asJson = Boolean(flags.json);
   const usage =
-    'usage: aflt loop validate <file> | run <file> [--dry-run] [--json] [--fresh] [--force] [--allow-existing] | start <file> | pause <name> | status [name] | stop <name> | resume <name> | approve <name> [--json]';
+    'usage: aflt loop init [--engine E] [--model M | --build-model M --plan-model M] [--out FILE] [--dry-run] [--force] [--json] | validate <file> | run <file> [--dry-run] [--json] [--fresh] [--force] [--allow-existing] [--create-worktree] | start <file> | pause <name> | status [name] | stop <name> | resume <name> | approve <name> [--json]';
   if (!sub || sub === 'help' || sub === '-h' || sub === '--help') {
     fail(usage);
+  }
+
+  if (sub === 'init') {
+    await cmdLoopInit((argv || []).slice((argv || []).indexOf('init') + 1));
+    return;
   }
 
   if (sub === 'validate') {
@@ -7698,7 +8134,7 @@ async function cmdLoop(argv) {
     const file = args[1];
     if (!file) {
       fail(
-        'usage: aflt loop run <file> [--dry-run] [--json] [--fresh] [--force] [--allow-existing]'
+        'usage: aflt loop run <file> [--dry-run] [--json] [--fresh] [--force] [--allow-existing] [--create-worktree]'
       );
     }
     const dryRun = Boolean(flags['dry-run']);
@@ -7710,6 +8146,7 @@ async function cmdLoop(argv) {
         fresh,
         forceTools: Boolean(flags.force),
         allowExisting: Boolean(flags['allow-existing']),
+        createWorktree: Boolean(flags['create-worktree']),
       });
     } catch (err) {
       fail(err.message, { json: asJson });
@@ -7747,6 +8184,7 @@ async function cmdLoop(argv) {
       process.stdout.write(
         `dry-run: loop "${result.name}" — ${result.phases.length} phase(s)\n` +
           `  cwd: ${result.cwd}\n` +
+          formatWorkdirLine(result) +
           `  permissions: ${result.permissions || 'restricted'}\n` +
           `  model: ${result.resolvedModel || result.model || '(engine default)'}\n`
       );
@@ -7861,7 +8299,9 @@ async function cmdLoop(argv) {
       } else {
         for (const row of result.loops) {
           process.stdout.write(
-            `${pad(row.name, 24)} ${pad(row.status, 10)} active=${row.active ? 'y' : 'n'} phase=${row.phaseId || '-'} updated=${row.updatedAt || '-'}\n`
+            `${pad(row.name, 24)} ${pad(row.status, 10)} active=${row.active ? 'y' : 'n'} phase=${row.phaseId || '-'} updated=${row.updatedAt || '-'}` +
+              (row.gate && row.gate.waiting && row.gate.costSoFar ? ` cost=${row.gate.costSoFar.text}` : '') +
+              '\n'
           );
         }
       }
@@ -7877,6 +8317,12 @@ async function cmdLoop(argv) {
           `project: ${result.project || '-'}`,
           `stopRequested: ${result.stopRequested}`,
           `pauseRequested: ${result.pauseRequested}`,
+          result.gate && result.gate.waiting
+            ? `gate: waiting for approval before phase ${result.gate.phaseId || '-'} (aflt loop approve ${result.name})`
+            : null,
+          result.gate && result.gate.waiting && result.gate.costSoFar
+            ? `cost so far: ${result.gate.costSoFar.text}`
+            : null,
           result.lastError ? `lastError: ${result.lastError}` : null,
           result.lock
             ? `lock: pid=${result.lock.pid} alive=${result.lock.alive}`
@@ -8002,8 +8448,8 @@ function cmdSpace(argv) {
   const sub = args[0];
   const asJson = Boolean(flags.json);
   const usage =
-    'usage: aflt space list|create|current|remove [--json]\n' +
-    '  aflt space list [--json]\n' +
+    'usage: aflt space list|ls|create|current|remove [--json]\n' +
+    '  aflt space list|ls [--json]\n' +
     '  aflt space create <name> [--json]\n' +
     '  aflt space current [--json]\n' +
     '  aflt space remove <name> [--force] [--json]';
@@ -8011,7 +8457,7 @@ function cmdSpace(argv) {
     fail(usage);
   }
 
-  if (sub === 'list') {
+  if (sub === 'list' || sub === 'ls') {
     const result = spaceLib.listSpaces();
     if (asJson) {
       emitJson(result);
@@ -8176,12 +8622,13 @@ async function cmdEval(argv) {
   const sub = args[0];
   const asJson = Boolean(flags.json);
   const usage =
-    'usage: aflt eval measure|score|report|gate|plateau [--json] …\n' +
+    'usage: aflt eval measure|score|report|gate|plateau|tile-dungeon [--json] …\n' +
     '  aflt eval measure [--json] [--out DIR]\n' +
     '  aflt eval score [results-file] [--json] [--history PATH] [--qualitative] [--results-dir DIR] [--write-baseline PATH] [--max-rounds N]\n' +
     '  aflt eval report [--json] [--history PATH] [--limit N]\n' +
     '  aflt eval gate [--json] [--base REF] [--paths a,b] [--improve] [--baseline PATH] [--results PATH] [--results-dir DIR] [--history PATH] [--score N]\n' +
-    '  aflt eval plateau [--json] [--baseline PATH] [--history PATH] [--max-rounds N] [--rounds N]';
+    '  aflt eval plateau [--json] [--baseline PATH] [--history PATH] [--max-rounds N] [--rounds N]\n' +
+    '  aflt eval tile-dungeon [--json] [--dry-run] [--trials N] [--candidate DIR] [--base DIR] [--engine NAME] [--model NAME] [--timeout-sec N]';
   if (!sub || sub === 'help' || sub === '-h' || sub === '--help') {
     fail(usage);
   }
@@ -8540,6 +8987,42 @@ async function cmdEval(argv) {
     // Exit 0 always when the check ran; callers inspect stop=true (or use
     // passRegex). Non-zero only on hard errors above.
     process.exitCode = 0;
+    return;
+  }
+
+  if (sub === 'tile-dungeon') {
+    const tileDungeon = require('../scripts/eval/tile-dungeon');
+    const tdArgs = (argv || []).slice(1);
+    const flags = tileDungeon.parseArgv(tdArgs);
+    let result;
+    try {
+      result = await tileDungeon.runTileDungeon({
+        argv: tdArgs,
+        flags,
+        json: asJson || flags.json,
+        dryRun: Boolean(flags.dryRun),
+        trials: flags.trials,
+        candidate: flags.candidate,
+        base: flags.base,
+        engine: flags.engine,
+        model: flags.model,
+        timeoutSec: flags.timeoutSec,
+      });
+    } catch (err) {
+      fail(err.message || String(err), { json: asJson });
+    }
+    if (asJson || flags.json) {
+      emitJson({ ok: Boolean(result.ok), ...result });
+    } else if (result.dryRun) {
+      process.stdout.write(
+        `eval tile-dungeon dry-run: ${result.plan.trials} trial(s) sha=${result.plan.sha}\n`
+      );
+    } else {
+      process.stdout.write(
+        `eval tile-dungeon: ${result.ok ? 'ok' : 'FAILED'} mean=${result.mean} median=${result.median} stdDev=${result.stdDev}\n`
+      );
+    }
+    process.exitCode = result.ok ? 0 : 1;
     return;
   }
 

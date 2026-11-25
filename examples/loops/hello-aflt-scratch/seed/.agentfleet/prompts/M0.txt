@@ -1,0 +1,26 @@
+Do not switch to plan mode.
+Never use pkill/killall or pattern-matched kills; only stop PIDs you started.
+
+You are building Milestone 0 (M0) of tile-dungeon FROM SCRATCH in this git repo. There is no starter code and no template to copy: you write every file yourself. Work only inside this repo (the current working directory). Do not search the rest of the disk for seed code, templates, or other tile-dungeon repos.
+
+First read AGENTS.md and SPEC.md (they are in this repo). The requirements below repeat the M0 contract; do not rewrite AGENTS.md or SPEC.md. Do not edit anything under .agentfleet/ (the loop, its prompts and its checks).
+
+Build the zero-dependency Node ESM + HTML canvas scaffold described in SPEC.md § M0:
+1. package.json: "name": "tile-dungeon", "private": true, "type": "module", scripts "start": "node server.js" and "test": "node --test test/*.test.js". No dependencies or devDependencies. Do not run npm install.
+2. server.js: a minimal node:http static server with a NAMED export createServer() (export function createServer — not export default) returning an un-listened http.Server. When run directly (node server.js) it listens on process.env.HOST || '127.0.0.1' and Number(process.env.PORT || 8792) and logs the URL. Do not bind 8790 or 8791.
+   - GET /health -> 200 application/json {"ok":true}
+   - GET / and /index.html -> public/index.html
+   - /src/* -> files under src/; any other path -> files under public/
+   - path-traversal safe (403 outside those dirs), 404 for missing files, correct Content-Type for .html .js .css .json .svg .png, Cache-Control: no-store
+3. public/index.html: HTML5 page with <canvas id="game" width="800" height="600"></canvas> and <script type="module" src="/src/main.js"></script>, dark background, crisp pixelated canvas.
+4. src/main.js: browser entry module that gets the #game canvas, clears it, and draws a "Tile Dungeon initializing..." placeholder. No game logic yet.
+5. test/smoke.test.js (node:test + node:assert/strict): import createServer from '../server.js', listen on port 0 on 127.0.0.1, assert /health is 200 with { ok: true }, / is 200 HTML containing <canvas id="game", and a path-traversal request (e.g. /src/../../package.json or /..%2Fpackage.json) does not return a file from outside public/ or src/. Close the server.
+6. README.md: title, Quick Start (npm start, open http://127.0.0.1:8792), Testing (npm test), Architecture (the files above), and the M1–M5a milestone plan from SPEC.md.
+
+Do not implement M1 features (no RNG, game-state, renderer, or input modules). Keep AGENTS.md and SPEC.md if they exist.
+
+Run the package.json test script (node --test test/*.test.js) until fully green. If you start node server.js to check it, use a free PORT and stop only that PID.
+
+The loop then runs its M0 check: it verifies these files structurally, runs node --test, and boots node server.js on a free port to hit /health, / and /src/main.js. It never copies code in, so the scaffold must work as you leave it.
+
+Do not commit.

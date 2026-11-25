@@ -189,11 +189,69 @@ function isHerdrFocusLocal(loc) {
   return host === '127.0.0.1' || host === 'localhost' || host === '::1';
 }
 
+/**
+ * Format an ISO timestamp (or epoch ms) in the viewer's local time zone with a
+ * short zone label: "2026-11-24 14:37:01 EST". Never shows raw UTC.
+ * opts.timeZone (tests) overrides the browser zone; opts.seconds=false drops
+ * seconds; opts.zone=false drops the label. Unparseable input is returned as-is.
+ */
+/** "3m ago" style age for an ISO time (empty when unknown). */
+function formatAgo(value, nowMs) {
+  const t = value ? Date.parse(value) : NaN;
+  if (!Number.isFinite(t)) return '';
+  const s = Math.max(0, Math.round(((nowMs || Date.now()) - t) / 1000));
+  if (s < 60) return s + 's ago';
+  const m = Math.round(s / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 48) return h + 'h ' + (m % 60) + 'm ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+
+/** Improve round label: "improve-r2 (round 2/3)" while running, else the last one run. */
+function formatLoopRound(round) {
+  if (!round || !round.total) return '';
+  if (round.current) return round.current + ' (round ' + round.number + '/' + round.total + ')';
+  if (round.last) return round.last + ' (' + round.number + '/' + round.total + ' rounds run)';
+  return '0/' + round.total + ' rounds run';
+}
+
+function formatLocalDateTime(value, opts) {
+  const o = opts || {};
+  if (value == null || value === '') return '';
+  const t = typeof value === 'number' ? value : Date.parse(String(value));
+  if (!Number.isFinite(t)) return String(value);
+  const d = new Date(t);
+  const pad = function (n) { return String(n).padStart(2, '0'); };
+  let y, mo, da, h, mi, s, zone = '';
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: o.timeZone || undefined,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hourCycle: 'h23', timeZoneName: 'short',
+    });
+    const parts = {};
+    fmt.formatToParts(d).forEach(function (p) { parts[p.type] = p.value; });
+    y = parts.year; mo = parts.month; da = parts.day;
+    h = parts.hour === '24' ? '00' : parts.hour; mi = parts.minute; s = parts.second;
+    zone = parts.timeZoneName || '';
+  } catch (_) {
+    y = d.getFullYear(); mo = pad(d.getMonth() + 1); da = pad(d.getDate());
+    h = pad(d.getHours()); mi = pad(d.getMinutes()); s = pad(d.getSeconds());
+    const off = -d.getTimezoneOffset();
+    zone = 'UTC' + (off >= 0 ? '+' : '-') + pad(Math.floor(Math.abs(off) / 60)) + ':' + pad(Math.abs(off) % 60);
+  }
+  let out = y + '-' + mo + '-' + da + ' ' + h + ':' + mi + (o.seconds === false ? '' : ':' + s);
+  if (o.zone !== false && zone) out += ' ' + zone;
+  return out;
+}
+
 function renderTaskCompletion(completion) {
   if (!completion) return '';
   return '<section class="task-completion"><div class="label">Latest Task Complete</div>' +
     '<p class="completion-meta">' + escapeHtml(completion.sessionTitle) + ' · ' +
-    escapeHtml(completion.at) + '</p><div class="completion-body">' +
+    escapeHtml(formatLocalDateTime(completion.at)) + '</p><div class="completion-body">' +
     renderMarkdown(completion.summary, { documentLinks: false }) + '</div>' +
     (completion.truncated ? '<p class="completion-meta">Preview truncated; the full message is saved in the project note when capture is enabled.</p>' : '') +
     (completion.saveError ? '<p class="memory-error">Could not save completion: ' + escapeHtml(completion.saveError) + '</p>' : '') +
@@ -687,6 +745,7 @@ function loopStatusClass(status) {
   const s = String(status || 'unknown').toLowerCase();
   if (s === 'running' || s === 'pending') return 'running';
   if (s === 'waiting') return 'waiting';
+  if (s === 'needs_human') return 'waiting';
   if (s === 'paused') return 'paused';
   if (s === 'completed') return 'completed';
   if (s === 'failed' || s === 'stopped') return s;
@@ -743,10 +802,18 @@ function renderLoopsListHtml(loops, selectedName) {
     const selected = selectedName && name === selectedName;
     const status = String(loop.status || 'unknown');
     const meta = [
-      loop.phaseId ? 'phase ' + loop.phaseId : null,
+      loop.active ? 'live' : null,
+      loop.engine ? loop.engine + (loop.model ? '/' + loop.model : '') : null,
+      loop.round && loop.round.current
+        ? 'round ' + formatLoopRound(loop.round)
+        : loop.phaseId
+          ? 'phase ' + loop.phaseId
+          : null,
       loop.attempt != null ? 'attempt ' + loop.attempt : null,
+      loop.lastActivityAt ? 'last activity ' + formatAgo(loop.lastActivityAt) : null,
       formatLoopElapsed(loop.elapsedMs),
       formatLoopBudget(loop.budget),
+      formatLoopRowUsage(loop.usage) || null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -851,12 +918,63 @@ function formatLoopUsage(usage) {
   if (estN > 0 && usage.accuracy !== 'estimated') {
     parts.push(estN + ' estimated');
   }
-  if (usage.cost != null && Number.isFinite(Number(usage.cost))) {
-    parts.push('$' + Number(usage.cost).toFixed(4));
-  } else if (usage.cost == null && total != null) {
-    parts.push('cost unknown');
-  }
+  const cost = formatUsageCost(usage);
+  if (cost) parts.push(cost);
+  else if (total != null) parts.push('cost unknown');
   return parts.length ? parts.join(' · ') : '—';
+}
+
+/**
+ * Recorded cost of a usage rollup: Copilot AI credits and dollars
+ * ("278.8 credits · $2.79"), else a reported USD cost. '' when the engine
+ * recorded no cost (Cursor). Never derived from tokens.
+ */
+function formatUsageCost(usage) {
+  if (!usage || typeof usage !== 'object') return '';
+  const credits = usage.credits != null ? Number(usage.credits) : NaN;
+  if (Number.isFinite(credits)) {
+    const c = credits < 10 ? credits.toFixed(2) : credits.toFixed(1);
+    const usd = usage.usd != null ? Number(usage.usd) : NaN;
+    return c + ' credits' + (Number.isFinite(usd) ? ' · $' + usd.toFixed(2) : '');
+  }
+  if (usage.usd != null && Number.isFinite(Number(usage.usd))) return '$' + Number(usage.usd).toFixed(2);
+  if (usage.cost != null && Number.isFinite(Number(usage.cost))) return '$' + Number(usage.cost).toFixed(4);
+  return '';
+}
+
+/** Short token + cost bit for a loop row ("6.1m tok · 278.8 credits · $2.79"). */
+function formatLoopRowUsage(usage) {
+  if (!usage || typeof usage !== 'object') return '';
+  const total = usage.totalTokens != null ? Number(usage.totalTokens) : NaN;
+  const bits = [];
+  if (Number.isFinite(total)) {
+    bits.push(
+      (total >= 1e6 ? (Math.round(total / 1e5) / 10) + 'm' : total >= 1e3 ? Math.round(total / 1e3) + 'k' : String(total)) +
+        ' tok'
+    );
+  }
+  const cost = formatUsageCost(usage);
+  if (cost) bits.push(cost);
+  return bits.join(' · ');
+}
+
+/** Note when the read-time recompute disagrees with the stored rollup. */
+function formatLoopUsageNote(usage) {
+  if (!usage || typeof usage !== 'object') return '';
+  const notes = [];
+  if (usage.storedTotalTokens != null && usage.recomputed) {
+    notes.push(
+      'Recomputed from per-session turns (de-duplicated); the stored rollup said ' +
+        Number(usage.storedTotalTokens).toLocaleString('en-US') +
+        ' tok, recorded before the double-count fix.'
+    );
+  }
+  if (usage.creditsSource === 'per-call' && usage.calls) {
+    notes.push(
+      'Credits from ' + usage.callsWithCost + ' of ' + usage.calls + ' per-call usage records (as the engine recorded them).'
+    );
+  }
+  return notes.join(' ');
 }
 
 /**
@@ -895,6 +1013,9 @@ function renderLoopPhaseTree(detail) {
       '">' +
       escapeHtml(p.status || 'pending') +
       '</span>';
+    if (p.roundRunning) {
+      html += ' <span class="loops-row-meta">' + escapeHtml(p.roundRunning) + ' running</span>';
+    }
     if (p.evalScore != null && Number.isFinite(Number(p.evalScore))) {
       html +=
         ' <span class="loops-phase-score" title="Eval overall score">' +
@@ -966,6 +1087,64 @@ function renderLoopPhaseCards(pipeline) {
 }
 
 /**
+ * True when a loop has finished (completed / failed / stopped) and no runner
+ * is live, so Stop and Pause have nothing to act on.
+ */
+function loopIsFinished(loop) {
+  if (!loop || typeof loop !== 'object') return false;
+  const s = String(loop.status || '').toLowerCase();
+  if (s !== 'completed' && s !== 'failed' && s !== 'stopped') return false;
+  return !loop.runnerPid && !loop.schedulerRunning;
+}
+
+/**
+ * Merge a phase edited in the loop form over the phase it was opened from, so
+ * fields the form has no input for (type, promptFile, timeouts, improveModel,
+ * protected, verify) survive a save. A phase opened with a promptFile keeps it
+ * while the prompt box stays empty; script / plan-next phases never gain a
+ * prompt or a placeholder eval.
+ */
+function mergeEditedLoopPhase(orig, edited) {
+  if (!orig || typeof orig !== 'object') return edited;
+  const out = Object.assign({}, orig, edited);
+  const promptEmpty = !edited.prompt || !String(edited.prompt).trim();
+  if (promptEmpty) delete out.prompt;
+  if (promptEmpty && orig.promptFile) out.promptFile = orig.promptFile;
+  if (!promptEmpty) delete out.promptFile;
+  if (!edited.model) delete out.model;
+  if (!edited.gate) delete out.gate;
+  if (!edited.mode) delete out.mode;
+  if (!edited.session && orig.session) out.session = orig.session;
+  if (orig.type === 'script') {
+    delete out.prompt;
+    delete out.promptFile;
+  }
+  if (orig.type === 'plan-next' && !orig.eval) {
+    const cmd = edited.eval && edited.eval.command;
+    if (cmd == null || String(cmd).trim() === 'true') delete out.eval;
+  }
+  if (orig.eval && edited.eval) {
+    const origCmd = Array.isArray(orig.eval.command) ? orig.eval.command.join(' ') : String(orig.eval.command);
+    if (String(edited.eval.command) === origCmd) out.eval = Object.assign({}, orig.eval, { exitCode: orig.eval.exitCode != null ? orig.eval.exitCode : 0 });
+    else out.eval = Object.assign({}, orig.eval, edited.eval);
+  }
+  return out;
+}
+
+/**
+ * Banner for a loop paused at an approval gate: which phase is next and the
+ * cost so far (credits / $ when the engine records them, else "cost unknown").
+ */
+function renderLoopGateBanner(detail) {
+  const gate = (detail && detail.gate) || {};
+  const cost = gate.costSoFar || null;
+  let text = 'Waiting for approval before phase ' + (gate.phaseId || detail.phaseId || '?') + '.';
+  if (cost && cost.text) text += ' Cost so far: ' + cost.text + '.';
+  text += ' Approve to continue, or Stop.';
+  return '<p class="loops-gate-banner" role="status">' + escapeHtml(text) + '</p>';
+}
+
+/**
  * Detail panel HTML for a loop status payload from GET /api/loops/:name.
  */
 function renderLoopDetailHtml(detail) {
@@ -983,30 +1162,62 @@ function renderLoopDetailHtml(detail) {
       escapeHtml(detail.name) +
       '">Approve</button>';
   }
+  const finished = loopIsFinished(detail);
+  const finishedTitle = finished
+    ? ' disabled aria-disabled="true" title="Loop is ' + escapeHtml(status) + '; nothing to '
+    : '';
   html +=
     '<button type="button" class="loops-btn subtle" data-loop-action="pause" data-loop-name="' +
     escapeHtml(detail.name) +
-    '">Pause</button>';
+    '"' +
+    (finished ? finishedTitle + 'pause"' : '') +
+    '>Pause</button>';
   html +=
     '<button type="button" class="loops-btn subtle" data-loop-action="resume" data-loop-name="' +
     escapeHtml(detail.name) +
     '">Resume</button>';
+  // Stop is the destructive (red) action only while there is something to
+  // stop; a completed / failed / stopped loop gets a neutral disabled button.
   html +=
-    '<button type="button" class="loops-btn danger" data-loop-action="stop" data-loop-name="' +
+    '<button type="button" class="loops-btn ' +
+    (finished ? 'subtle' : 'danger') +
+    '" data-loop-action="stop" data-loop-name="' +
     escapeHtml(detail.name) +
-    '">Stop</button>';
+    '"' +
+    (finished ? finishedTitle + 'stop"' : '') +
+    '>Stop</button>';
   html +=
     '<button type="button" class="loops-btn subtle" data-loop-action="edit" data-loop-name="' +
     escapeHtml(detail.name) +
     '">Edit</button>';
+  html +=
+    '<a class="loops-btn subtle loops-making-of" href="/making-of/' +
+    encodeURIComponent(detail.name) +
+    '" target="_blank" rel="noopener" title="Every AI call, commit and artifact of this loop">Making of</a>';
   html += '</div></div>';
+
+  if (waitingGate) html += renderLoopGateBanner(detail);
 
   html += '<div class="loops-stats">';
   const stats = [
     { k: 'Status', v: status },
-    { k: 'Phase', v: detail.phaseId || '—' },
+    { k: 'Engine', v: detail.engine || '—' },
+    { k: 'Model', v: detail.model || '—' },
+    {
+      k: 'Phase',
+      v: (detail.round && detail.round.current) || detail.phaseId || '—',
+    },
+    { k: 'Round', v: formatLoopRound(detail.round) || '—' },
     { k: 'Attempt', v: detail.attempt != null ? String(detail.attempt) : '—' },
     { k: 'Step', v: detail.step || '—' },
+    { k: 'Started', v: detail.startedAt ? formatLocalDateTime(detail.startedAt) : '—' },
+    { k: 'Updated', v: detail.updatedAt ? formatLocalDateTime(detail.updatedAt) : '—' },
+    {
+      k: 'Last activity',
+      v: detail.lastActivityAt
+        ? formatLocalDateTime(detail.lastActivityAt) + ' (' + formatAgo(detail.lastActivityAt) + ')'
+        : '—',
+    },
     { k: 'Elapsed', v: formatLoopElapsed(detail.elapsedMs) },
     { k: 'Budget', v: formatLoopBudget(detail.budget) },
     { k: 'Tokens', v: formatLoopUsage(detail.usage) },
@@ -1020,6 +1231,8 @@ function renderLoopDetailHtml(detail) {
       '</span></div>';
   }
   html += '</div>';
+  const usageNote = formatLoopUsageNote(detail.usage);
+  if (usageNote) html += '<p class="loops-row-meta loops-usage-note">' + escapeHtml(usageNote) + '</p>';
 
   html += '<div class="label">Step pipeline</div>';
   html += renderLoopStepPipeline(detail.steps);
@@ -1037,6 +1250,36 @@ function renderLoopDetailHtml(detail) {
       '<p class="loops-form-status error">' + escapeHtml(detail.lastError) + '</p>';
   }
   return html;
+}
+
+/** Fields of a loop summary/detail that make a rendered detail pane stale. */
+function loopSyncSignature(loop) {
+  if (!loop || typeof loop !== 'object') return '';
+  const budget = loop.budget || {};
+  const elapsed = Number(loop.elapsedMs);
+  return JSON.stringify([
+    loop.name,
+    loop.status,
+    loop.phaseId,
+    loop.phaseIndex,
+    loop.attempt,
+    loop.step,
+    loop.runsUsed != null ? loop.runsUsed : budget.runsUsed,
+    loop.active ? 1 : 0,
+    loop.updatedAt,
+    Number.isFinite(elapsed) ? Math.floor(elapsed / 1000) : null,
+  ]);
+}
+
+/**
+ * Whether the selected loop's detail pane must be re-fetched/re-rendered after
+ * the list poll delivered `summary` (the loop's row from /api/loops).
+ * `synced` is { name, signature } of the summary the pane last synced to.
+ */
+function loopDetailNeedsSync(summary, synced, selectedName) {
+  if (!selectedName || !summary || summary.name !== selectedName) return false;
+  if (!synced || synced.name !== selectedName) return true;
+  return loopSyncSignature(summary) !== synced.signature;
 }
 
 /** Build a default empty phase editor model. */
@@ -1058,7 +1301,7 @@ function emptyLoopPhaseForm(index) {
 if (typeof module !== 'undefined' && module.exports && typeof document === 'undefined') {
   module.exports = {
     mergeSimPreserve, renderProjectMemory, renderGraphHint, renderMarkdown, resolveDocumentLink,
-    renderTaskCompletion, activityLabel, rowFilterState, stateLabel, isHerdrFocusLocal, isDormantProject,
+    renderTaskCompletion, formatLocalDateTime, activityLabel, rowFilterState, stateLabel, isHerdrFocusLocal, isDormantProject,
     STATE_LABELS, FILTER_PRIORITY,
     HIDE_DORMANT_STORAGE_KEY, SHOW_ARCHIVED_STORAGE_KEY, DEFAULT_DORMANT_AFTER_MS,
     GRAPH_SPREAD_STORAGE_KEY, TIMELINE_PRESET_STORAGE_KEY, TIMELINE_VIEW_STORAGE_KEY,
@@ -1068,7 +1311,10 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
     graphViewTransform, clampTimelineWindow, resolveTimelineWindow, formatTimelineAxisLabel,
     zoomTimelineWindow, panTimelineWindow, layoutTimelineMarkers, maxTimelineLaneCount,
     formatLoopElapsed, formatLoopBudget, formatLoopUsage, loopStatusClass, renderLoopStepPipeline,
-    renderLoopsListHtml, renderLoopPhaseTree, renderLoopPhaseCards, renderLoopDetailHtml,
+    formatUsageCost, formatLoopRowUsage, formatLoopUsageNote,
+    loopIsFinished,
+    loopSyncSignature, loopDetailNeedsSync,
+    renderLoopsListHtml, renderLoopPhaseTree, renderLoopPhaseCards, renderLoopDetailHtml, renderLoopGateBanner, mergeEditedLoopPhase,
     emptyLoopPhaseForm, escapeHtml,
   };
 } else {
@@ -1827,7 +2073,7 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
       }
       applySpaceBrand();
       if (snapshotData) {
-        metaEl.textContent = spacePrefix() + 'snapshot · ' + state.generatedAt;
+        metaEl.textContent = spacePrefix() + 'snapshot · ' + formatLocalDateTime(state.generatedAt);
         return;
       }
       if (state.error) {
@@ -1900,9 +2146,7 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
       const events = s.events || [];
       eventsEl.innerHTML = events
         .map(function (ev) {
-          const when = String(ev.at || '')
-            .replace('T', ' ')
-            .slice(0, 19);
+          const when = formatLocalDateTime(ev.at);
           return (
             '<li><span class="when">' +
             esc(when) +
@@ -2030,7 +2274,7 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
           row('sessions', item.sessionCount) +
           row('archived', item.archivedCount || 0) +
           row('Working', item.workingCount != null ? item.workingCount : item.runningCount) +
-          row('last activity', item.lastActivity || '—') +
+          row('last activity', item.lastActivity ? formatLocalDateTime(item.lastActivity) : '—') +
           '</dl>' +
           projectActionButtonsHtml(item) +
           renderTaskCompletion(item.completion);
@@ -2054,7 +2298,7 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
         row('worker', item.workerStatus || '—') +
         row('cwd', item.cwd || '—') +
         row('model', item.model || '—') +
-        row('last used', item.lastUsed || '—') +
+        row('last used', item.lastUsed ? formatLocalDateTime(item.lastUsed) : '—') +
         row('last exit', item.lastExit == null ? '—' : item.lastExit) +
         row('error', item.lastError || '—') +
         row(
@@ -2778,7 +3022,7 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
             '" data-marker-id="' +
             esc(mid) +
             '" aria-label="' +
-            esc(stateLabel(m.state) + ' · ' + (m.at || '')) +
+            esc(stateLabel(m.state) + ' · ' + formatLocalDateTime(m.at)) +
             '"></button>';
         });
       }
@@ -3095,7 +3339,7 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
             '<p class="group-turn"><strong>' +
             esc(stateLabel(m.state)) +
             '</strong> · ' +
-            esc(m.at || '') +
+            esc(formatLocalDateTime(m.at)) +
             '<br/><span class="prompt">' +
             esc((m.prompt || '(no prompt)').slice(0, 120)) +
             '</span></p>'
@@ -3116,7 +3360,7 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
         '<p><strong>' +
         esc(stateLabel(payload.state)) +
         '</strong> · ' +
-        esc(payload.at || '') +
+        esc(formatLocalDateTime(payload.at)) +
         '</p>' +
         (usageLine ? '<p class="usage-line">' + esc(usageLine) + '</p>' : '') +
         '<div class="label">Prompt</div><p>' +
@@ -3431,7 +3675,8 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
       if (u.accuracy === 'estimated' && !(u.outputTokens > 0)) {
         line += ' · incomplete';
       }
-      if (u.cost == null) line += ' · cost unknown';
+      const costBit = formatUsageCost(u);
+      line += ' · ' + (costBit || 'cost unknown');
       return line;
     }
 
@@ -3455,8 +3700,8 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
         const ratio = Number(summary.promptToResponse);
         bits.push((ratio >= 10 ? String(Math.round(ratio)) : String(ratio)) + ':1');
       }
-      if (summary.cost != null) bits.push('$' + Number(summary.cost).toFixed(4));
-      else bits.push('cost unknown');
+      const costBit = formatUsageCost(summary);
+      bits.push(costBit || 'cost unknown');
       if ((Number(summary.estimatedTurns) || 0) > 0) {
         bits.push(Number(summary.estimatedTurns) + ' estimated turn' +
           (Number(summary.estimatedTurns) === 1 ? '' : 's'));
@@ -3518,7 +3763,7 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
           String(ev.reply) !== String(ev.replyPreview));
         const expanded = expandedReplies.has(key);
         const body = expanded ? ev.reply : (ev.replyPreview != null ? ev.replyPreview : ev.reply);
-        const when = String(ev.at || '').replace('T', ' ').slice(0, 19);
+        const when = formatLocalDateTime(ev.at);
         const isMsg = ev.type === 'message';
         const statusState = isMsg
           ? (ev.status === 'completed' ? 'completed' : ev.status === 'read' ? 'idle' : 'waiting')
@@ -3717,8 +3962,13 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
 
     let selectedLoopName = null;
     let loopDetailCache = null;
+    let loopDetailSynced = null;
+    let loopDetailSyncing = false;
+    let loopDetailHtml = '';
     let loopDefinitionsCache = [];
     let loopFormPhases = [emptyLoopPhaseForm(0)];
+    /** Definition the form was opened from; fields the form has no input for are kept on save. */
+    let loopFormOrig = null;
     let loopsLoading = false;
 
     function setView(name) {
@@ -3841,6 +4091,17 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
           (p.force === true ? ' checked' : '') +
           '/></label>';
         html +=
+          '<label>model <input data-field="model" value="' +
+          escapeHtml(p.model || '') +
+          '" placeholder="loop default"/></label>';
+        const kindBits = [];
+        if (p.type && p.type !== 'run') kindBits.push('type: ' + p.type);
+        if (p.promptFile) kindBits.push('promptFile: ' + p.promptFile);
+        if (p.improveModel) kindBits.push('improveModel: ' + p.improveModel);
+        if (kindBits.length) {
+          html += '<p class="loops-row-meta loops-phase-kind">' + escapeHtml(kindBits.join(' · ')) + '</p>';
+        }
+        html +=
           '<label>eval command <input data-field="evalCommand" value="' +
           escapeHtml(p.evalCommand || 'true') +
           '"/></label>';
@@ -3868,7 +4129,14 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
           const el = ed.querySelector('[data-field="' + field + '"]');
           return el ? el.value : '';
         };
+        const idxAttr = Number(ed.getAttribute('data-phase-index'));
+        const prev = Number.isFinite(idxAttr) ? loopFormPhases[idxAttr] : null;
         next.push({
+          _orig: prev && prev._orig ? prev._orig : null,
+          type: prev && prev.type ? prev.type : '',
+          promptFile: prev && prev.promptFile ? prev.promptFile : '',
+          improveModel: prev && prev.improveModel ? prev.improveModel : '',
+          model: get('model') || '',
           id: get('id'),
           engine: get('engine') || 'cursor',
           session: get('session'),
@@ -3890,6 +4158,7 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
       setShown(loopsFormWrap, true);
       setLoopsFormStatus('', false);
       const def = prefill || {};
+      loopFormOrig = def;
       loopsForm.name.value = def.name || '';
       loopsForm.project.value = def.project || '';
       loopsForm.engine.value = def.engine || 'cursor';
@@ -3916,6 +4185,11 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
             gate: p.gate || '',
             mode: p.mode || '',
             force: p.force === true,
+            model: p.model || '',
+            type: p.type || '',
+            promptFile: p.promptFile || '',
+            improveModel: p.improveModel || '',
+            _orig: p,
           };
         });
       } else {
@@ -3946,16 +4220,20 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
         if (p.session) phase.session = String(p.session).trim();
         if (p.gate) phase.gate = p.gate;
         if (p.mode) phase.mode = p.mode;
-        return phase;
+        if (p.model) phase.model = String(p.model).trim();
+        return mergeEditedLoopPhase(p._orig, phase);
       });
-      const def = {
+      const orig = loopFormOrig && typeof loopFormOrig === 'object' ? loopFormOrig : {};
+      const def = Object.assign({}, orig, {
         name: String(loopsForm.name.value || '').trim(),
         engine: loopsForm.engine.value || 'cursor',
         cwd: String(loopsForm.cwd.value || '.').trim() || '.',
-        allow: { commit: false, merge: false, push: false },
-        budget: {},
+        allow: orig.allow || { commit: false, merge: false, push: false },
+        budget: Object.assign({}, orig.budget || {}),
         phases: phases,
-      };
+      });
+      delete def.budget.maxRuns;
+      delete def.budget.maxHours;
       const project = String(loopsForm.project.value || '').trim();
       if (project) def.project = project;
       const maxRuns = Number(loopsForm.maxRuns.value);
@@ -4016,24 +4294,69 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
       loopsDefinitionsEl.innerHTML = html;
     }
 
+    function loopSummaryFromState(name) {
+      const rows = (state && state.loops && state.loops.loops) || [];
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i] && rows[i].name === name) return rows[i];
+      }
+      return null;
+    }
+
+    /** Swap the detail markup, keeping the panel and eval-tail scroll offsets. */
+    function setLoopDetailHtml(html) {
+      if (!loopsDetailEl || html === loopDetailHtml) return;
+      const panel = loopsDetailEl.parentNode || null;
+      const panelTop = panel ? panel.scrollTop : 0;
+      const tails = loopsDetailEl.querySelectorAll
+        ? Array.prototype.map.call(loopsDetailEl.querySelectorAll('.loops-eval-tail'), function (el) {
+            return el.scrollTop;
+          })
+        : [];
+      loopDetailHtml = html;
+      loopsDetailEl.innerHTML = html;
+      if (panel) panel.scrollTop = panelTop;
+      if (loopsDetailEl.querySelectorAll) {
+        Array.prototype.forEach.call(loopsDetailEl.querySelectorAll('.loops-eval-tail'), function (el, i) {
+          if (tails[i] != null) el.scrollTop = tails[i];
+        });
+      }
+    }
+
     async function selectLoop(name) {
+      const changed = name !== selectedLoopName;
       selectedLoopName = name;
       renderLoopsListFromState();
       if (!name) {
         loopDetailCache = null;
-        if (loopsDetailEl) {
-          loopsDetailEl.innerHTML = '<div class="empty">Select a loop or create one</div>';
-        }
+        loopDetailSynced = null;
+        setLoopDetailHtml('<div class="empty">Select a loop or create one</div>');
         return;
       }
+      const summary = loopSummaryFromState(name);
       try {
-        loopDetailCache = await fetchLoopDetail(name);
-        if (loopsDetailEl) loopsDetailEl.innerHTML = renderLoopDetailHtml(loopDetailCache);
+        const detail = await fetchLoopDetail(name);
+        if (selectedLoopName !== name) return;
+        loopDetailCache = detail;
+        loopDetailSynced = { name: name, signature: loopSyncSignature(summary || detail) };
+        if (changed && loopsDetailEl && loopsDetailEl.parentNode) loopsDetailEl.parentNode.scrollTop = 0;
+        setLoopDetailHtml(renderLoopDetailHtml(loopDetailCache));
       } catch (err) {
-        if (loopsDetailEl) {
-          loopsDetailEl.innerHTML =
-            '<div class="empty">' + escapeHtml(String(err.message || err)) + '</div>';
-        }
+        setLoopDetailHtml(
+          '<div class="empty">' + escapeHtml(String(err.message || err)) + '</div>'
+        );
+      }
+    }
+
+    /** Re-sync the selected loop's detail pane when the polled loop row changed. */
+    async function syncSelectedLoopDetail() {
+      if (!selectedLoopName || loopDetailSyncing) return;
+      const summary = loopSummaryFromState(selectedLoopName);
+      if (!loopDetailNeedsSync(summary, loopDetailSynced, selectedLoopName)) return;
+      loopDetailSyncing = true;
+      try {
+        await selectLoop(selectedLoopName);
+      } finally {
+        loopDetailSyncing = false;
       }
     }
 
@@ -4069,7 +4392,7 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
       renderLoopsListFromState();
       renderLoopDefinitionsList();
       if (loopDetailCache && selectedLoopName) {
-        if (loopsDetailEl) loopsDetailEl.innerHTML = renderLoopDetailHtml(loopDetailCache);
+        setLoopDetailHtml(renderLoopDetailHtml(loopDetailCache));
       }
       refreshLoopsData();
     }
@@ -4532,10 +4855,8 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
       if (historyTooltipId) renderHistoryTooltip();
       if (currentView === 'loops') {
         renderLoopsListFromState();
-        if (selectedLoopName && loopDetailCache && loopDetailCache.name === selectedLoopName) {
-          // Keep showing last detail; refreshLoopsData is kicked from setView/refresh.
-          if (loopsDetailEl) loopsDetailEl.innerHTML = renderLoopDetailHtml(loopDetailCache);
-        }
+        // The SSE tick carries fresh loop rows; refetch the detail when they moved.
+        syncSelectedLoopDetail();
       }
       // Always rebuild/draw the graph model so a later switch (or tests) have nodes.
       updateSim(opts);
@@ -4630,6 +4951,12 @@ if (typeof module !== 'undefined' && module.exports && typeof document === 'unde
     function firstState(data) {
       applyState(data, { forceRebuild: true });
       if (data && data.defaultView === 'graph') setView('graph');
+      else if (data && data.defaultView === 'loops') {
+        setView('loops');
+        const rows = (data.loops && data.loops.loops) || [];
+        const pick = rows.find(function (l) { return l && l.active; }) || rows[0];
+        if (pick && pick.name) selectLoop(pick.name);
+      }
     }
 
     if (snapshotData) {

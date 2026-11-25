@@ -404,7 +404,7 @@ describe('aflt eval improve loop (E3)', () => {
     assert.equal(typeof plateau.stop, 'boolean');
   });
 
-  it('example self-improve.json validates with plannedPhaseGate none', () => {
+  it('example self-improve.json validates and normalizes integration fields', () => {
     const loop = require('../lib/loop');
     const example = path.join(repoRoot, 'examples', 'loops', 'self-improve.json');
     assert.ok(fs.existsSync(example));
@@ -412,15 +412,91 @@ describe('aflt eval improve loop (E3)', () => {
     raw.cwd = tmp;
     const file = path.join(tmp, 'self-improve.json');
     writeJson(file, raw);
-    const result = loop.validateFile(file, { checkPromptFiles: false });
+    const result = loop.validateFile(file, { checkPromptFiles: false, checkCwd: false });
     assert.equal(result.ok, true, (result.errors || []).join('; '));
-    assert.equal(result.definition.plannedPhaseGate, 'none');
-    assert.equal(result.definition.allow.commit, false);
-    assert.equal(result.definition.allow.merge, false);
-    assert.equal(result.definition.budget.maxPhases, 16);
-    const plan = result.definition.phases.find((p) => p.type === 'plan-next');
+    const def = result.definition;
+    assert.equal(def.plannedPhaseGate, 'none');
+    assert.equal(def.allow.commit, true);
+    assert.equal(def.allow.merge, false);
+    assert.equal(def.allow.push, false);
+    assert.equal(def.budget.maxPhases, 16);
+    assert.deepEqual(def.engines, ['copilot', 'cursor', 'opencode']);
+    assert.equal(def.workdir.mode, 'worktree');
+    assert.equal(def.workdir.base, 'main');
+    assert.ok(def.protected && def.protected.paths.includes('scripts/eval/**'));
+    assert.ok(def.verify && def.verify.tier3 && def.verify.tier3.tileDungeon);
+    assert.equal(def.commitGate.mode, 'observe');
+    assert.deepEqual(def.commitGate.requireTiers, ['tier1']);
+    assert.equal(def.escalation.afterFailedRounds, 3);
+    assert.equal(def.escalation.event, 'loop.needs_human');
+    const preflight = def.phases.find((p) => p.id === 'preflight');
+    assert.ok(preflight);
+    assert.equal(preflight.verify, false);
+    const measure = def.phases.find((p) => p.id === 'measure');
+    assert.equal(measure.verify, false);
+    const plan = def.phases.find((p) => p.type === 'plan-next');
     assert.ok(plan);
-    assert.match(plan.prompt || '', /RUBRIC|baseline|plateau/i);
+    assert.match(plan.prompt || '', /RUBRIC|baseline|plateau|verify|tier3/i);
+  });
+
+  it('example self-improve.json CLI validate and dry-run', () => {
+    const example = path.join(repoRoot, 'examples', 'loops', 'self-improve.json');
+
+    const wtRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aflt-self-wt-'));
+    const wtDir = path.join(wtRoot, 'aflt-self');
+    const branch = `test/self-improve-${Date.now()}`;
+    const add = spawnSync('git', ['worktree', 'add', '-b', branch, wtDir, 'HEAD'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    });
+    assert.equal(add.status, 0, add.stderr);
+    const raw = JSON.parse(fs.readFileSync(example, 'utf8'));
+    raw.cwd = wtDir;
+    const file = path.join(wtRoot, 'self-improve-dry.json');
+    writeJson(file, raw);
+
+    const val = spawnSync(process.execPath, [afJs, 'loop', 'validate', file, '--json'], {
+      encoding: 'utf8',
+      env: { ...process.env, AGENTFLEET_TEST: '1' },
+    });
+    assert.equal(val.status, 0, val.stderr + val.stdout);
+    const vj = JSON.parse(val.stdout);
+    assert.equal(vj.ok, true, (vj.errors || []).join('; '));
+    assert.equal(vj.definition.engines.length, 3);
+
+    const dry = spawnSync(
+      process.execPath,
+      [afJs, 'loop', 'run', file, '--dry-run', '--json'],
+      { encoding: 'utf8', env: { ...process.env, AGENTFLEET_ENGINE: 'copilot', AGENTFLEET_TEST: '1' } }
+    );
+    assert.equal(dry.status, 0, dry.stderr + dry.stdout);
+    const dj = JSON.parse(dry.stdout);
+    assert.equal(dj.ok, true, dj.error || (dj.errors || []).join('; '));
+    assert.equal(dj.dryRun, true);
+    assert.equal(dj.name, 'self-improve');
+    spawnSync('git', ['worktree', 'remove', '--force', wtDir], { cwd: repoRoot, encoding: 'utf8' });
+    spawnSync('git', ['branch', '-D', branch], { cwd: repoRoot, encoding: 'utf8' });
+  });
+
+  it('example self-improve.json is unpinned and follows AGENTFLEET_ENGINE', () => {
+    const loop = require('../lib/loop');
+    const example = path.join(repoRoot, 'examples', 'loops', 'self-improve.json');
+    const raw = JSON.parse(fs.readFileSync(example, 'utf8'));
+    assert.equal(raw.engine, undefined);
+    for (const p of raw.phases) assert.equal(p.engine, undefined, p.id);
+    raw.cwd = tmp;
+    const file = path.join(tmp, 'self-improve-unpinned.json');
+    writeJson(file, raw);
+    for (const engine of ['copilot', 'cursor', 'opencode']) {
+      const result = loop.validateFile(file, {
+        checkPromptFiles: false,
+        env: { ...process.env, AGENTFLEET_ENGINE: engine },
+      });
+      assert.equal(result.ok, true, (result.errors || []).join('; '));
+      assert.equal(result.definition.engine, engine);
+      assert.ok(result.definition.phases.length > 0);
+      for (const p of result.definition.phases) assert.equal(p.engine, engine, p.id);
+    }
   });
 
   it('hermetic fake engine: one improve round, passing gate, stop on plateau', async () => {

@@ -215,7 +215,7 @@ aflt loop run /path/to/aflt/examples/loops/hello-aflt/hello-aflt-improve.json --
 
 What this does (see example README):
 
-- Seeds portable M0 when `package.json` is missing (`m0-seed/` + `seed-m0.js`)
+- Seeds portable M0 when `package.json` is missing (`m0-seed/` + `seed-m0.js`, run as a `type: "script"` phase — no Copilot call)
 - Runs M1–M4, M5a, then up to 3 plan-next improve rounds gated by `improve-gate.js` (HEAD vs working tree)
 - `aflt loop` is the orchestrator; Copilot is only the worker engine
 - Relative `promptFile` / `improve-gate.js` / `seed-m0.js` resolve against the **definition directory**, not the game cwd
@@ -247,9 +247,9 @@ Prefer **`--json`** for metrics. Human text is a short summary; JSON includes (f
 | Field | Meaning |
 |-------|---------|
 | `status` | e.g. `running` → `completed` (or `failed` / `stopped` / `paused` / `waiting`) |
-| `elapsedMs` | Wall time since `startedAt` (frozen at completed/failed/stopped/paused) |
-| `budget.hoursUsed` / `runsUsed` | Hours and run counts vs definition caps |
-| `usage` | Per-loop token rollup (from phase `usage-summary.json`; never invents USD) |
+| `elapsedMs` | Active run time: sum of run segments (start/resume → completed/failed/stopped/paused/gate wait); idle gaps between runs are not counted. `wallElapsedMs` is wall time since `startedAt` |
+| `budget.hoursUsed` / `runsUsed` | Hours and run counts vs definition caps (`hoursUsed` is active run time, the same number `maxHours` is enforced on) |
+| `usage` | Per-loop token rollup, recomputed at read time from each phase session's turns (de-duplicated; `storedTotalTokens` / `recomputed` when the `state.json` rollup disagrees). Copilot `credits` / `usd` come from per-call usage records (`creditsSource: "per-call"`, `calls`, `callsWithCost`) when the turns carry none. Never estimates USD from tokens |
 | `pipeline[].id` / `status` / `evalScore` | Phase tree; `evalScore` from stored phase results (`overall` / `after` parsed before `lastEval` truncation) |
 | `phases.<id>.evalScore` | Same scores on raw phase state |
 | `loopRootSessionId` | Master session for History nesting (`loop-hello-aflt`) |
@@ -258,13 +258,15 @@ Prefer **`--json`** for metrics. Human text is a short summary; JSON includes (f
 
 With `aflt dashboard --serve` on the space’s port:
 
-- **List row:** name, status, current phase, attempt, elapsed, budget (`N/M runs · H/h`)
-- **Detail:** step pipeline, phase tree with **eval scores**, eval output tails, History session links, **Tokens** rollup (`formatLoopUsage`: e.g. `12.3k tok · 8 turns · reported` or `~… · estimated`; shows `cost unknown` when `cost` is null)
+- **List row:** name, status, current phase, attempt, elapsed, budget (`N/M runs · H/h`), tokens and recorded cost (`6.1m tok · 278.8 credits · $2.79`)
+- **Detail:** Started / Updated (local time), step pipeline, phase tree with **eval scores**, eval output tails, History session links, **Tokens** rollup (`formatLoopUsage`: e.g. `6.1m tok · 9 turns · reported · 278.8 credits · $2.79`; `cost unknown` only when the engine recorded no cost, e.g. Cursor), plus a note when totals were recomputed from per-session records
 - History view: phase workers nest under the loop master; session rows show compact token meta
 
 ### Token / cost honesty
 
-- Copilot `cost` stays **`null`** (provider “cost” on usage records is stored as `premiumRequests`, not USD). Dashboard may show **cost unknown**.
+- Copilot `cost` stays **`null`** (provider “cost” on usage records is stored as `premiumRequests`, not USD).
+- Copilot AI credits are recorded separately: `credits` / `usd` / `costBasis: "copilot-nano-aiu"` from `copilotUsage.totalNanoAiu` (1e9 nano-AIU = 1 credit = $0.01). The Loops view shows them (rows and detail; read from the per-call records when older turns lack them), and `aflt --space copilot-live making-of hello-aflt` shows credits and dollars per call, per phase and for the whole run.
+- `usage-summary.json` counts a headless run once (`dedupedTurns`). Loop rollups stored in `state.json` before this fix are double-counted; `loop status` and the dashboard recompute them from the phase sessions' turns at read time (the state file is not rewritten) and say so in the Loops detail.
 - Prefer **`reported`** counts from Copilot `usage_record` (JSON stdout or `events.jsonl`). Some turns are still **`accuracy: "estimated"`** (char/4 of prompt + final reply only) or rollups **`partial`** when mixed with reported turns. Do not treat estimates as API-reported.
 - Planner / loop-root sessions on a **fresh** run mint **new** session ids (no title reuse of completed/failed peers). Mid-run resume still reuses bound `sessionId`s.
 
@@ -351,7 +353,8 @@ Fill in after the run (paste into `$OUT/RESULTS.md` or a ticket):
   - improve-* (if any):
   - plan-next (wrote `plan-next.json`? attempts?):
 - Loop `usage.totalTokens` / `accuracy` / `turnCount`:
-- `usage.cost` (expect null / “cost unknown”):
+- `usage.cost` (expect null):
+- AI credits / $ (`usage.credits` / `usage.usd` in `loop status --json`, or `aflt making-of hello-aflt --json`):
 - Estimated vs reported notes:
 - Planner / loop-root session ids (confirm fresh per `--fresh` run):
 
@@ -361,6 +364,7 @@ Fill in after the run (paste into `$OUT/RESULTS.md` or a ticket):
 - [ ] state.json
 - [ ] plan-next.json (if planner ran)
 - [ ] usage-summary-*.json
+- [ ] making-of.html (`aflt making-of hello-aflt`)
 - [ ] screenshot of Loops view (optional)
 
 ## Issues / gaps observed
@@ -373,7 +377,7 @@ Fill in after the run (paste into `$OUT/RESULTS.md` or a ticket):
 
 ## Known gaps (do not “fix” in the write-up)
 
-1. **USD cost unknown** — Copilot path keeps `cost: null`; never derive dollars from tokens.
+1. **USD on the dashboard** — Copilot keeps `cost: null`; the Loops view shows recorded AI credits and `usd` (as in `usage-summary.json` and the making-of page). Cursor records no cost, so Cursor loops show “cost unknown”. Never derive dollars from tokens.
 2. **Estimated usage** — some turns/rollups are `estimated` or `partial`, not fully API-reported. Even with `usage_record`, a long edit can still look small if the record is missing and the fallback is chars/4 of prompt + final reply only.
 3. **Fresh planner sessions** — `--fresh` / new runs mint new planner + loop-root sessions; do not expect title reuse of completed peers.
 4. **Long wall clock** — budget allows up to 8 hours; success is green phases + scores, not a short runtime.

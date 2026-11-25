@@ -1,0 +1,25 @@
+Do not switch to plan mode.
+Never use pkill/killall or pattern-matched kills; only stop PIDs you started.
+Read SPEC.md, README.md, AGENTS.md, package.json, server.js, public/index.html, src/main.js, and test/smoke.test.js first. They were written by an agent in M0 (there is no seed code); adapt to what is actually there rather than assuming a template layout.
+Work only inside this repo; do not look for templates or other tile-dungeon repos on disk.
+You are building Milestone 1 (M1) of tile-dungeon in plain Node.js ESM and HTML5 Canvas with zero runtime dependencies.
+
+Requirements for M1:
+1. Seeded deterministic RNG in src/rng.js (e.g. Mulberry32 or similar pure PRNG with integer/float/range helpers) so all randomness is reproducible from a seed.
+2. Pure game-state module in src/game-state.js (and optional src/tiles.js / src/map.js) with zero DOM, window, or canvas dependencies:
+   - Grid-based tile map (walls and floor tiles; e.g. a walled room/arena with interior pillars/obstacles to test collision).
+   - Player position (x, y), seed, turn counter, and basic state inspection helpers.
+   - Pure step/move function (e.g. movePlayer(state, dx, dy) or step(state, action)) with wall collision and map-bounds clamping.
+3. Canvas renderer and browser input adapter in src/renderer.js and src/main.js (loaded via ES module in public/index.html):
+   - Render the tile grid clearly on the HTML5 canvas (walls, floor, player).
+   - Keyboard movement via Arrow keys and WASD (prevent default page scroll on arrows/space).
+   - Simple crisp HUD showing seed, player coordinates, turn count, and controls.
+   - Keep server.js serving public/ and src/ cleanly on 127.0.0.1 (default PORT 8792; HOST overrides). Do not bind 8790 or 8791.
+4. Headless node:test tests in test/ (keep test/smoke.test.js passing too):
+   - Verify seeded RNG determinism (same seed -> identical sequence; different seeds -> different sequences).
+   - Verify grid creation, player movement in all 4 directions, wall collision blocking movement, and bounds safety.
+   - Verify pure game-state imports and runs in Node without any DOM globals.
+5. Update README.md and AGENTS.md to reflect the M1 modules and controls.
+6. Run the package.json test script (node --test test/*.test.js) until fully green.
+
+Do not commit.

@@ -27,3 +27,4 @@ scripts/eval/_cov-probe.js
 herdr/mods/*/gpui-kit.d.ts
 herdr/mods/*/jsconfig.json
 herdr/mods/*/*.error
+!examples/loops/hello-aflt-scratch/seed/.agentfleet/

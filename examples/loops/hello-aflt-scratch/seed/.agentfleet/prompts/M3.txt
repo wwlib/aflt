@@ -1,0 +1,29 @@
+Do not switch to plan mode.
+Never use pkill/killall or pattern-matched kills; only stop PIDs you started.
+Read SPEC.md, README.md, AGENTS.md, and existing files in src/ and test/ first. Everything in this repo was written by agents in earlier milestones (there is no seed code); build on what is actually there.
+Work only inside this repo; do not look for templates or other tile-dungeon repos on disk.
+You are building Milestone 3 (M3) of tile-dungeon: Monsters, Turn-Based Combat, HP, Message Log, and Death/Restart.
+
+Requirements for M3:
+1. Monsters and simple AI in src/monsters.js (or src/entities.js) integrated into src/game-state.js:
+   - Multiple monster archetypes (e.g. Goblin, Slime/Bat, Orc) with name, symbol/color, maxHp, hp, attack, defense/xp, and aggro range.
+   - Deterministic seeded monster spawning in rooms away from the player's starting tile.
+   - Monster AI turn: after a valid player turn, living monsters act — if within FOV/aggro range they step toward the player (avoiding walls and other monsters); otherwise wander occasionally or hold.
+2. Turn-based melee combat:
+   - Bumping into a tile occupied by a living monster attacks that monster instead of moving onto it, dealing damage and consuming a turn.
+   - Adjacent monsters attack the player on the monster turn, reducing player HP.
+   - Defeated monsters are removed (or marked dead) and logged.
+3. HP, Message Log, Death & Restart:
+   - Player HP / maxHp, kills counter, and gameOver flag in pure game state.
+   - Bounded message log (e.g. recent 30-50 events) recording combat hits, misses/kills, and death.
+   - When player HP reaches 0, set gameOver = true and block further movement/actions except restart.
+   - Pure restart function in game-state (plus keyboard R / Enter and UI Restart button in browser).
+   - Render monsters (only when currently visible in FOV!), monster HP indicators/bars, player HP bar, message log panel, and Game Over overlay in canvas/HTML.
+4. Headless node:test tests in test/:
+   - Test monster spawning determinism and non-overlap with walls/player.
+   - Test turn-based bump combat, HP reduction, monster death, and player damage.
+   - Test monster AI chasing/blocking behavior, message log updates, player death setting gameOver, and restart restoring clean initial state.
+5. Update README.md and AGENTS.md for M3.
+6. Run the package.json test script (node --test test/*.test.js) until fully green.
+
+Do not commit.

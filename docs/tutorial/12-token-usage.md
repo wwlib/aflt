@@ -5,7 +5,9 @@
 - Know where token counts land: per-turn `usage` and `usage-summary.json`
 - Understand how Cursor, Copilot, and OpenCode report (or estimate) usage
 - Spot the same numbers in History, Gantt tooltips, and memory rollups
-- Stay honest about accuracy — no invented USD costs
+- Read Copilot AI credits and dollars as Copilot recorded them
+- Know the per-call records loop phases keep (`calls.jsonl`) and the `aflt making-of` page
+- Stay honest about accuracy — no USD estimated from tokens
 
 Stay in the throwaway space: `--space tutorial` or `AFLT_SPACE=tutorial`. There is **no** `usage` subcommand on the CLI — token counts are recorded automatically on runs and turns.
 
@@ -48,8 +50,9 @@ Every normalized `usage` blob shares the same shape (`lib/usage.js`):
 | `totalTokens` / `promptToResponse` | Totals and input∶output ratio |
 | `cost` | Provider-reported money only (OpenCode). Never invented from tokens |
 | `premiumRequests` | Copilot-only accounting (not USD) |
+| `credits` / `usd` / `costBasis` | Copilot AI credits from `copilotUsage.totalNanoAiu` (1e9 nano-AIU = 1 credit), dollars at $0.01 per credit, and `costBasis: "copilot-nano-aiu"`; `null` for engines that report no credits |
 
-Session rollups (`usage-summary.json`) sum turns and add `turnCount`, `reportedTurns` / `estimatedTurns` / `partialTurns`, plus `models` and an overall `accuracy` (`partial` when the mix is mixed).
+Session rollups (`usage-summary.json`) sum turns and add `turnCount`, `reportedTurns` / `estimatedTurns` / `partialTurns`, plus `models` and an overall `accuracy` (`partial` when the mix is mixed). A headless run is counted once: engine-log turns (Copilot events, Cursor transcripts) that re-record the same model calls as the latest `headless-run` turn are skipped and counted in `dedupedTurns`. Copilot `credits` / `usd` are summed the same way.
 
 Example shape from the hermetic suite (Cursor-reported turn):
 
@@ -106,11 +109,29 @@ Interactive / sync paths prefer, in order:
 3. Partial `result.usage` (often premium-only)
 4. Char/4 estimate when only prompt/reply text exists
 
-Copilot’s raw `inputTokens` is **cache-inclusive**. Aflt splits uncached = `input − cacheRead − cacheWrite` and keeps `totalInput` as the inclusive total. The provider’s `cost` field on usage records is stored as **`premiumRequests`**, not USD (`cost` stays `null` for Copilot).
+Copilot’s raw `inputTokens` is **cache-inclusive**. Aflt splits uncached = `input − cacheRead − cacheWrite` and keeps `totalInput` as the inclusive total. The provider’s `cost` field on usage records is stored as **`premiumRequests`**, not USD (`cost` stays `null` for Copilot). When a usage record carries `copilotUsage.totalNanoAiu`, the usage row also stores **`credits`** (nano-AIU ÷ 1e9) and **`usd`** (credits × $0.01) with `costBasis: "copilot-nano-aiu"` — Copilot's own billing unit, not a token-price estimate.
 
 ### Fallback estimate
 
 If the engine returns no usable metrics, aflt may attach `accuracy: "estimated"` / `source: "estimated-chars"` (roughly `ceil(chars / 4)` for the prompt and the final reply text only). That figure is a floor, not a bill: tool calls, cache, and provider credits are not included, so a long Copilot edit can look like a few hundred tokens. History shows a `~` prefix for estimated or partial rows. Estimated never overwrites a reported row. USD is never invented from tokens.
+
+## Recorded calls for loop phases
+
+`aflt loop` phases keep more than the rollup. After each phase run, the loop runner writes under `runs/<session>/`:
+
+| File | Contents |
+|------|----------|
+| `engine/` | A copy of the engine's own record: Copilot `events.jsonl`; Cursor `--output-format stream-json` events (loop phases run Cursor in stream-json) and its agent transcript |
+| `calls.jsonl` | One normalized line per model call: phase, index, timestamp, engine, model, input, output, tool calls, tokens, cost, `costBasis` |
+| `session-context.json` | System prompt(s), runtime instructions, tool-definition size — once per session |
+
+`aflt making-of <loop>` turns these into one page with every call, its tokens and (Copilot) its credits and dollars, per phase and for the whole run — see [09 — Loops](09-loops.md#review-a-run-making-of).
+
+![Making-of for a Copilot run: AI credits and dollars per phase](../images/making-of-copilot-costs.png)
+
+Expand a call to see what was new in that request, what the model returned (text and tool calls with results) and a token table with the credit rate per token type:
+
+![One expanded call: tool calls, results and the per-call token and credit table](../images/making-of-call.png)
 
 ## Dashboard History
 
@@ -118,10 +139,12 @@ When you open the live UI (`aflt dashboard --serve` — see [03 — Dashboard](0
 
 - **Tree rows** — compact token meta (`10.2k tok · 254:1`, with `~` when estimated/partial)
 - **Gantt marker hover** — a usage line like `10,155 in → 40 out (254:1) · reported`
-- **Session / project detail** — usage summary badge (`reported` / `estimated` / `partial`) with totals, uncached + cached breakdown when present, output (+ reasoning), ratio; OpenCode may show provider `$cost`; Copilot may show `premium` counts
+- **Session / project detail** — usage summary badge (`reported` / `estimated` / `partial`) with totals, uncached + cached breakdown when present, output (+ reasoning), ratio; OpenCode may show provider `$cost`; Copilot shows `premium` counts and `credits · $` (sessions synced before credits were recorded get them read-only from their per-call usage records, the same source as the making-of page)
 - **Per-turn bar chart** — input (top) vs output (bottom) for recent turns; estimated/partial bars are dashed / faded
 
-No new screenshots are required for this chapter — use the existing History image above for orientation.
+The Loops view shows the per-loop token rollup and recorded cost in each row and in the detail (`6.1m tok · 9 turns · reported · 278.8 credits · $2.79` for the Copilot Sonnet hello-aflt run; Cursor loops say `cost unknown` because Cursor records no cost). The rollup is recomputed at read time from the phase sessions' turns, de-duplicated, so loops recorded before the double-count fix show corrected totals (that Sonnet run's stored rollup said 10.4M tokens; it is 6.1M) with a note in the detail; `state.json` is not rewritten. Copilot credits come from the same per-call usage records as the making-of page when older turns lack them. Use `aflt making-of` for per-call and per-phase figures.
+
+![Loops view for the Copilot Sonnet run: AI credits and dollars in the row and the Tokens line](../images/dashboard-loops-copilot.png)
 
 ## Memory rollup
 
@@ -141,7 +164,7 @@ aflt --space tutorial memory sync --dry-run --json
 
 ## Honesty rules
 
-- **Never invent USD from tokens.** Aflt does not multiply token counts by a price table.
+- **Never invent USD from tokens.** Aflt does not multiply token counts by a price table. Copilot `usd` is Copilot's own recorded AI credits × $0.01, not a token estimate.
 - **OpenCode `cost`** — kept only when the provider reports it (including `0`).
 - **Copilot `premiumRequests`** — separate field; not mixed into `cost`.
 - **`reported` vs `estimated` vs `partial`** — trust the badge; mixed sessions roll up as `partial`.

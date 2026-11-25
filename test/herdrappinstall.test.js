@@ -85,6 +85,18 @@ describe('herdrappinstall', () => {
     assert.equal(st.items.find((i) => i.kind === 'layout').state, 'copied');
   });
 
+  it('--copy status notices drift in helper modules (afspace.js), not just main.js', () => {
+    fs.writeFileSync(path.join(sources.mod, 'afspace.js'), 'export const A = 1;\n');
+    install.install({ home, sources, root: srcRoot, copy: true });
+    const modDest = path.join(home, 'mods', 'af-sessions');
+    assert.ok(fs.existsSync(path.join(modDest, 'afspace.js')));
+    let st = install.status({ home, sources, root: srcRoot });
+    assert.equal(st.items.find((i) => i.kind === 'mod').state, 'copied');
+    fs.writeFileSync(path.join(sources.mod, 'afspace.js'), 'export const A = 2;\n');
+    st = install.status({ home, sources, root: srcRoot });
+    assert.equal(st.items.find((i) => i.kind === 'mod').state, 'other');
+  });
+
   it('refuses overwrite of different content without --force', () => {
     const destMod = path.join(home, 'mods', 'af-sessions');
     fs.mkdirSync(destMod, { recursive: true });
