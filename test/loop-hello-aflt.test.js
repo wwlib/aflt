@@ -107,6 +107,22 @@ describe('hello-aflt example (docs-only seed, everything inside the project)', (
     assert.ok(plan.phases.length >= 7);
   });
 
+  it('in-project loop.json resolves cwd "." against the project folder, not process.cwd()', () => {
+    const loop = require('../lib/loop');
+    const gameCwd = seededProject();
+    const file = path.join(gameCwd, '.agentfleet', 'loop.json');
+    const prev = process.cwd();
+    try {
+      process.chdir(repoRoot);
+      const result = loop.validateFile(file);
+      assert.equal(result.ok, true, (result.errors || []).join('; '));
+      assert.deepEqual(result.warnings.filter((w) => /outside the project/.test(w)), []);
+      assert.equal(fs.realpathSync(result.definition.cwd), fs.realpathSync(gameCwd));
+    } finally {
+      process.chdir(prev);
+    }
+  });
+
   it('seed contains only instructions, config and the loop with its checks: no game code, no HTML', () => {
     const all = listFiles(seedDir);
     const tooling = all.filter((f) => f.startsWith('.agentfleet/'));

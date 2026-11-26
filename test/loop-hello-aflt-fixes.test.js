@@ -467,7 +467,7 @@ describe('hello-aflt loop fixes', () => {
       definitionDir: defDir,
       cwd: gameCwd,
     });
-    assert.equal(resolved, promptFile);
+    assert.equal(fs.realpathSync(resolved), fs.realpathSync(promptFile));
 
     const validated = loop.validateDefinition(
       {
@@ -484,7 +484,10 @@ describe('hello-aflt loop fixes', () => {
       { definitionDir: defDir, cwdBase: gameCwd, checkCwd: true }
     );
     assert.equal(validated.ok, true, (validated.errors || []).join('; '));
-    assert.equal(validated.definition.phases[0].promptFile, promptFile);
+    assert.equal(
+      fs.realpathSync(validated.definition.phases[0].promptFile),
+      fs.realpathSync(promptFile)
+    );
     assert.equal(
       fs.realpathSync(validated.definition.cwd),
       fs.realpathSync(gameCwd)
