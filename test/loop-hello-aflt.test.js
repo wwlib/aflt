@@ -131,7 +131,7 @@ describe('hello-aflt example (docs-only seed, everything inside the project)', (
       ['.agentfleet/checks/improve-gate.cjs', '.agentfleet/checks/m0-check.cjs', '.agentfleet/loop.json']
     );
     const files = all.filter((f) => !f.startsWith('.agentfleet/'));
-    assert.deepEqual(files, ['.agentfleet.json', '.gitignore', 'AGENTS.md', 'SPEC.md']);
+    assert.deepEqual(files, ['.gitignore', 'AGENTS.md', 'SPEC.md']);
     for (const rel of files) {
       const base = path.basename(rel);
       const ext = path.extname(base).toLowerCase();

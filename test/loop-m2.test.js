@@ -340,6 +340,67 @@ exit 0
     }
   });
 
+  it('stale lock cleanup reaps only recorded runner children', () => {
+    const loop = require('../lib/loop');
+    const name = 'stale-reap';
+    const lp = loop.lockPath(name);
+    fs.mkdirSync(path.dirname(lp), { recursive: true });
+    const runnerPid = 424242;
+    const lonePid = 515151;
+    const groupPid = 616161;
+    const groupId = 717171;
+    const payload = {
+      children: [
+        { pid: lonePid, pgid: null },
+        { pid: groupPid, pgid: groupId },
+      ],
+    };
+    fs.writeFileSync(
+      lp,
+      `${runnerPid}\n${os.hostname()}\n${new Date(Date.now() - 120_000).toISOString()}\n${JSON.stringify(payload)}\n`,
+      'utf8'
+    );
+    const past = new Date(Date.now() - 120_000);
+    fs.utimesSync(lp, past, past);
+
+    const calls = [];
+    const alive = new Set([lonePid, groupPid]);
+    const broke = loop._test.tryBreakStaleLock(lp, {
+      staleMs: 0,
+      isPidAlive: (pid) => alive.has(Number(pid)),
+      killPid: (pid, signal) => {
+        calls.push({ kind: 'pid', pid: Number(pid), signal });
+      },
+      killGroup: (pgid, signal) => {
+        calls.push({ kind: 'group', pgid: Number(pgid), signal });
+      },
+    });
+    assert.equal(broke, true);
+    assert.equal(fs.existsSync(lp), false);
+    assert.ok(calls.some((c) => c.kind === 'pid' && c.pid === lonePid && c.signal === 'SIGTERM'));
+    assert.ok(calls.some((c) => c.kind === 'pid' && c.pid === lonePid && c.signal === 'SIGKILL'));
+    assert.ok(calls.some((c) => c.kind === 'group' && c.pgid === groupId && c.signal === 'SIGTERM'));
+    assert.ok(calls.some((c) => c.kind === 'group' && c.pgid === groupId && c.signal === 'SIGKILL'));
+    assert.equal(calls.some((c) => c.pid === 999999 || c.pgid === 999999), false);
+  });
+
+  it('runner lock tracks spawned child pids for stale-lock reaping', () => {
+    const loop = require('../lib/loop');
+    const lock = loop.acquireRunnerLock('lock-children');
+    try {
+      const ok = loop._test.recordLockChildProcess('lock-children', {
+        pid: 2222,
+        pgid: 3333,
+      });
+      assert.equal(ok, true);
+      const info = loop.readLockInfo('lock-children');
+      assert.ok(Array.isArray(info.children));
+      assert.ok(info.children.some((c) => c.pid === 2222 && c.pgid === 3333));
+    } finally {
+      loop.releaseRunnerLock(lock);
+    }
+  });
+
   it('dashboard /api/loops list and pause/resume/stop', async () => {
     const loop = require('../lib/loop');
     const dash = require('../lib/dashboard');

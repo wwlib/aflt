@@ -130,6 +130,19 @@ describe('named spaces', () => {
     assert.equal(util.currentSpaceName(), 'tracked');
   });
 
+  it('warns when AGENTFLEET_HOME and AFLT_SPACE conflict', () => {
+    const explicit = path.join(home, 'custom-fleet');
+    const r = af(['ls', '--json'], {
+      AGENTFLEET_HOME: explicit,
+      AFLT_SPACE: 'tracked',
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /AFLT_SPACE=tracked is set, but AGENTFLEET_HOME is explicitly set/i);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.home, explicit);
+    assert.equal(out.space, 'tracked');
+  });
+
   it('invalid space names fail clearly', () => {
     const bad = ['', '../x', 'a/b', 'a\\b', '..', '.hidden', '-bad', 'bad name', 'x..y'];
     for (const name of bad) {

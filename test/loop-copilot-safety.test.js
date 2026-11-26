@@ -555,6 +555,15 @@ exit 1
     const plain = copilot.buildPrintArgs(session, { prompt: 'p', ...none });
     assert.ok(!plain.includes(dir));
     assert.ok(!plain.some((a) => a.includes('plan-next.json')));
+
+    const scoped = copilot.buildPrintArgs(session, {
+      prompt: 'p',
+      force: false,
+      ...grants,
+    });
+    assert.ok(scoped.includes(`--allow-tool=write(${planFile})`), scoped.join(' '));
+    assert.ok(!scoped.includes('--allow-all-tools'));
+    assert.ok(!scoped.includes('--allow-all-paths'));
   });
 
   it('runSessionPrompt passes loop grants to the Copilot argv for plan-next only', async () => {
