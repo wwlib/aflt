@@ -644,6 +644,88 @@ Environment:
   AGENTFLEET_MSG_RATE     Max messages per sender per 60s (default 10)
 `;
 
+const LOOP_USAGE =
+  'usage: aflt loop init [--engine E] [--model M | --build-model M --plan-model M] [--out FILE] [--dry-run] [--force] [--json] | validate <file> | run <file> [--dry-run] [--json] [--fresh] [--force] [--allow-existing] [--create-worktree] | start <file> | pause <name> | status [name] | stop <name> | resume <name> | approve <name> [--json]';
+
+const SPACE_USAGE =
+  'usage: aflt space list|ls|create|current|remove [--json]\n' +
+  '  aflt space list|ls [--json]\n' +
+  '  aflt space create <name> [--json]\n' +
+  '  aflt space current [--json]\n' +
+  '  aflt space remove <name> [--force] [--json]';
+
+const SERVICE_USAGE =
+  'usage: aflt service install|uninstall|status [--port N] [--host H] [--print] [--json]';
+
+const EVAL_USAGE =
+  'usage: aflt eval measure|score|report|gate|plateau|tile-dungeon [--json] …\n' +
+  '  aflt eval measure [--json] [--out DIR]\n' +
+  '  aflt eval score [results-file] [--json] [--history PATH] [--qualitative] [--results-dir DIR] [--write-baseline PATH] [--max-rounds N]\n' +
+  '  aflt eval report [--json] [--history PATH] [--limit N]\n' +
+  '  aflt eval gate [--json] [--base REF] [--paths a,b] [--improve] [--baseline PATH] [--results PATH] [--results-dir DIR] [--history PATH] [--score N]\n' +
+  '  aflt eval plateau [--json] [--baseline PATH] [--history PATH] [--max-rounds N] [--rounds N]\n' +
+  '  aflt eval tile-dungeon [--json] [--dry-run] [--trials N] [--candidate DIR] [--base DIR] [--engine NAME] [--model NAME] [--timeout-sec N]';
+
+function hasHelpFlag(argv) {
+  return (argv || []).some((a) => a === '-h' || a === '--help');
+}
+
+function earlyHelpUsage(argv) {
+  const args = Array.isArray(argv) ? argv.filter((a) => a !== '-h' && a !== '--help') : [];
+  if (!args.length) return USAGE;
+  const cmd = args[0];
+  const sub = args[1];
+  switch (cmd) {
+    case 'help':
+      return USAGE;
+    case 'loop':
+      if (!sub || sub === 'help') return LOOP_USAGE;
+      if (sub === 'validate') return 'usage: aflt loop validate <file> [--json]';
+      if (sub === 'run')
+        return 'usage: aflt loop run <file> [--dry-run] [--json] [--fresh] [--force] [--allow-existing] [--create-worktree]';
+      if (sub === 'start') return 'usage: aflt loop start <file> [--json]';
+      if (sub === 'pause') return 'usage: aflt loop pause <name> [--json]';
+      if (sub === 'status') return 'usage: aflt loop status [name] [--json]';
+      if (sub === 'stop') return 'usage: aflt loop stop <name> [--json]';
+      if (sub === 'resume') return 'usage: aflt loop resume <name> [--json]';
+      if (sub === 'approve') return 'usage: aflt loop approve <name> [--json]';
+      return LOOP_USAGE;
+    case 'space':
+      return SPACE_USAGE;
+    case 'service':
+      return SERVICE_USAGE;
+    case 'eval':
+      return EVAL_USAGE;
+    case 'notify':
+      return 'usage: aflt notify test [--json]';
+    case 'herdr-app':
+      return (
+        'usage: aflt herdr-app install [--copy] [--force] [--dry-run]\n' +
+        '       aflt herdr-app status'
+      );
+    case 'turns':
+      return 'usage: aflt turns backfill [<id|title>...] [--engine copilot|cursor|opencode|all] [--apply] [--json]';
+    case 'memory':
+      return 'usage: aflt memory [where|init|sync|dashboard|config|doc|status] …';
+    case 'docs':
+      if (sub === 'checkpoint')
+        return 'usage: aflt docs checkpoint request|complete [<dir>] [--project NAME] [--reason T] [--note PATH] [--json]';
+      if (sub === 'notify')
+        return 'usage: aflt docs notify flush|ack|status|retry [<dir>] [--project NAME] [--id ID] [--json]';
+      return 'usage: aflt docs [<project dir>] [--since <commit>] [--engine cursor|copilot|opencode] [--model X] [--force|--no-force] [--anyway] [--dry-run] [--json]\n       aflt docs --status [--json] [--all] [<dir>...]';
+    case 'msg':
+      return 'usage: aflt msg <to> <text...> [--type T] [--reply <msgId>] [--from S] [--json] [--dry-run]';
+    case 'inbox':
+      return 'usage: aflt inbox [<session>] [--unread] [--status queued|read|completed] [--mark-read|--mark-complete] [--json]';
+    case 'thread':
+      return 'usage: aflt thread <msgId|master> [--json]';
+    case 'mcp':
+      return 'usage: aflt mcp | aflt mcp install --engine copilot|cursor [--write] [--project] [--cwd DIR] [--dry-run] [--json]';
+    default:
+      return USAGE;
+  }
+}
+
 function cmdVersion(rest) {
   const { flags } = parseArgs(rest);
   const asJson = Boolean(flags.json);
@@ -659,23 +741,32 @@ async function main() {
   const stripped = stripSpaceFlag(rawArgv);
   if (stripped.sawSpace) {
     try {
-      applySpaceSelection({
+      const applied = applySpaceSelection({
         sawSpace: true,
         spaceFlag: stripped.space,
         env: process.env,
       });
+      if (applied && applied.warning) process.stderr.write(`warning: ${applied.warning}\n`);
     } catch (err) {
       fail(err.message || String(err));
     }
   } else if (require('../lib/util').envNonEmpty(process.env, 'AFLT_SPACE')) {
     try {
-      applySpaceSelection({ sawSpace: false, env: process.env });
+      const applied = applySpaceSelection({ sawSpace: false, env: process.env });
+      if (applied && applied.warning) process.stderr.write(`warning: ${applied.warning}\n`);
     } catch (err) {
       fail(err.message || String(err));
     }
   }
 
   const argv = stripped.argv;
+  if (hasHelpFlag(argv)) {
+    const usage = earlyHelpUsage(argv);
+    if (usage) {
+      process.stdout.write(usage.endsWith('\n') ? usage : usage + '\n');
+      return;
+    }
+  }
   if (argv.length === 0 || argv[0] === '-h' || argv[0] === '--help' || argv[0] === 'help') {
     process.stdout.write(USAGE);
     return;
@@ -711,6 +802,9 @@ async function main() {
       break;
     case '_supervise-headless':
       await cmdSuperviseHeadless(rest);
+      break;
+    case '_loop-runner':
+      await cmdLoopRunner(rest);
       break;
     case 'master':
       await cmdMaster(rest);
@@ -8079,14 +8173,45 @@ function formatWorkdirLine(result) {
   return `  workdir: ${bits.join(' ')}\n`;
 }
 
+function runDetachedLoopRunner(loopArgv) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      [__filename, '_loop-runner', ...(Array.isArray(loopArgv) ? loopArgv : [])],
+      {
+        env: { ...process.env, AFLT_LOOP_RUNNER_CHILD: '1' },
+        detached: true,
+        stdio: 'inherit',
+      }
+    );
+    child.once('error', reject);
+    child.once('close', (code, signal) => {
+      if (signal) process.exitCode = 1;
+      else process.exitCode = code == null ? 1 : code;
+      resolve();
+    });
+  });
+}
+
+async function cmdLoopRunner(argv) {
+  await cmdLoop(argv || []);
+}
+
 async function cmdLoop(argv) {
   const { args, flags } = parseArgs(argv || []);
   const sub = args[0];
   const asJson = Boolean(flags.json);
-  const usage =
-    'usage: aflt loop init [--engine E] [--model M | --build-model M --plan-model M] [--out FILE] [--dry-run] [--force] [--json] | validate <file> | run <file> [--dry-run] [--json] [--fresh] [--force] [--allow-existing] [--create-worktree] | start <file> | pause <name> | status [name] | stop <name> | resume <name> | approve <name> [--json]';
+  const usage = LOOP_USAGE;
   if (!sub || sub === 'help' || sub === '-h' || sub === '--help') {
     fail(usage);
+  }
+  if (
+    (sub === 'run' || sub === 'resume') &&
+    !flags['dry-run'] &&
+    process.env.AFLT_LOOP_RUNNER_CHILD !== '1'
+  ) {
+    await runDetachedLoopRunner(argv || []);
+    return;
   }
 
   if (sub === 'init') {

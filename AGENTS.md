@@ -4,7 +4,7 @@ This guide is for **AI coding agents** (GitHub Copilot CLI, Cursor CLI / `cursor
 
 `aflt` is the **primary command**. `af` and `agentfleet` are aliases for the same CLI (`bin/af.js`). The product name is **AgentFleet**. Internal names are unchanged: `~/.agentfleet`, `AGENTFLEET_*`, `.agentfleet.json`, MCP server name `af`, Herdr mod `af-sessions`. The npm package name is **`aflt`** (homepage [aflt.dev](https://aflt.dev)).
 
-Prefer **`aflt help`** (or `aflt` with no args) for the full usage text. **`aflt <command> --help` is not a dedicated help path** — some commands print a short usage error, and others (`ls`, `sync`, `import`, `doctor`, `setup`, `version`) may **run the command**.
+Prefer **`aflt help`** (or `aflt` with no args) for the full usage text. `aflt <command> --help` and `-h` now print help and exit `0` with no side effects (no sessions, files, or engine spawn).
 
 Human overview: [README.md](README.md) (dashboard screenshots in `docs/images/`; regenerate with `npm run screenshots` against a running `aflt dashboard --serve`). Release notes: [CHANGELOG.md](CHANGELOG.md).
 
@@ -431,7 +431,7 @@ Implementation: `scripts/eval/` (no new npm deps). Generated `eval/results/`, `e
 
 ### Loop runner (milestones 1–4)
 
-Long-running phases without a bot waking aflt: each phase runs a prompt in a Cursor/Copilot/OpenCode session, then an eval command; on failure the eval output is sent back as a fix prompt (up to `maxFixAttempts`). State is atomic under `$AGENTFLEET_HOME/loops/<name>/state.json`; a runner lock prevents two runners on one loop. Prompts are always argv data (no shell interpolation). `onPass` (`none`|`commit`|`merge`|`push`) only runs when loop-level `allow` flags permit (default all false).
+Long-running phases without a bot waking aflt: each phase runs a prompt in a Cursor/Copilot/OpenCode session, then an eval command; on failure the eval output is sent back as a fix prompt (up to `maxFixAttempts`). State is atomic under `$AGENTFLEET_HOME/loops/<name>/state.json`; a runner lock prevents two runners on one loop. On `run`/`resume`, a stale lock whose pid is dead is cleared, and only child processes recorded on that dead runner lock are reaped (no pattern kills). Prompts are always argv data (no shell interpolation). `onPass` (`none`|`commit`|`merge`|`push`) only runs when loop-level `allow` flags permit (default all false).
 
 ```bash
 aflt init <name> [--dir PATH] [--engine E] [--yes] [--existing] [--isolated]   # new looped project
@@ -487,7 +487,7 @@ Details: [`examples/loops/hello-aflt/README.md`](examples/loops/hello-aflt/READM
 
 **Service:** `aflt service install|uninstall|status [--port N] [--host H] [--print] [--json]` — macOS LaunchAgent `~/Library/LaunchAgents/dev.aflt.dashboard.plist` runs `aflt dashboard --serve` with KeepAlive; logs under `$AGENTFLEET_HOME/logs`. Named space uses `dev.aflt.dashboard.<space>.plist` (never overwrites the default). Default `--port` from space `config.json` when set. `--print` shows the plist without writing. Non-macOS prints a clear unsupported message (exit 1). Never call real `launchctl` from tests (inject a fake).
 
-**Named spaces:** global `--space NAME` (any position) or `AFLT_SPACE`; flag wins. When selected and `AGENTFLEET_HOME` is unset → `$HOME/.agentfleet/spaces/NAME`. Explicit `AGENTFLEET_HOME` wins for the directory. `aflt space list|ls|create|current|remove` (`ls` is an alias; `--json` on each; `remove` refuses non-empty without `--force`; never removes the default home). New spaces: next free dashboard port (8788+), notify off, isolated `memoryRepo`, recorded LaunchAgent label.
+**Named spaces:** global `--space NAME` (any position) or `AFLT_SPACE`; flag wins. When selected and `AGENTFLEET_HOME` is unset → `$HOME/.agentfleet/spaces/NAME`. Explicit `AGENTFLEET_HOME` wins for the directory; when both are set and conflict, aflt prints a clear warning and uses `AGENTFLEET_HOME` while still tracking the selected space name. `aflt space list|ls|create|current|remove` (`ls` is an alias; `--json` on each; `remove` refuses non-empty without `--force`; never removes the default home). New spaces: next free dashboard port (8788+), notify off, isolated `memoryRepo`, recorded LaunchAgent label.
 
 Opt-in notify events (same `notify` / `AFLT_NOTIFY_*` config): `loop.started`, `loop.phase.started`, `loop.phase.passed`, `loop.phase.failed`, `loop.completed`, `loop.failed`, `loop.stopped`, `loop.gate.waiting`, `loop.gate.approved`, `loop.engine.failover`, and opt-in `loop.heartbeat` — payload fields: `event`, `sessionId`, `title`, `project`, `engine`, `cwd` (redacted), `exitStatus`, `timestamp`, `summary` (redacted), `loop`, `phaseId`, `attempt`. Heartbeat interval: `config.json` `loop.heartbeatSeconds` (or `notify.loopHeartbeatSeconds`) / `AFLT_LOOP_HEARTBEAT_SECONDS` (default off / 0). To wake a Grok Bot on loop progress, point `notify.url` / `AFLT_NOTIFY_URL` at that bot’s webhook/routine ingest URL (optional `notify.key` / `AFLT_NOTIFY_KEY`); the loop never needs the bot to continue. Memory: appends `<project>/_aflt/loop-timeline.jsonl` and writes a status note per phase result when `memoryRepo` is configured; no-op otherwise.
 
@@ -751,7 +751,7 @@ OpenCode Herdr template remains installable via `aflt herdr-templates` (`opencod
 
 **Handoffs:** workers should write `$AGENTFLEET_RESULT` (default `$AGENTFLEET_HOME/results/<id>.md`) with Summary, Files changed, and Open questions. After a successful **headless** run, if the file is missing or stale, `aflt` may write an **af-fallback** from stdout. There is no automatic fallback for interactive runs. Freshness: the file is fresh iff it exists and `mtime` is after `runStartedAt` or `resultMtimeAtStart`. `aflt result --require-fresh` exits 1 if stale.
 
-**Copilot write grant without `--force`:** `aflt` passes `--add-dir` for results/plans and pre-approves the handoff/plan via `--allow-tool=write(…)`. New folders may still show a trust prompt — `aflt send <id> "1"`.
+**Copilot write grant without `--force`:** `aflt` passes `--add-dir` for results/plans and pre-approves the handoff/plan via `--allow-tool=write(…)`. Loop `plan-next` also gets a scoped write grant to its own `$AGENTFLEET_HOME/loops/<name>/plan-next.json` (and only that path). New folders may still show a trust prompt — `aflt send <id> "1"`.
 
 **Cursor `--force`:** allows tool/command approval. Workspace trust is `--trust` (passed by default). Without `--force`, Cursor may not write the handoff; `aflt` will fall back from final stdout on headless success.
 

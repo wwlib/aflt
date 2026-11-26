@@ -502,6 +502,49 @@ describe('hello-aflt loop fixes', () => {
     assert.deepEqual(cmd, ['node', gate]);
   });
 
+  it('validate quiets outside-cwd warnings for files inside project .agentfleet only', () => {
+    const loop = require('../lib/loop');
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'af-hello-dotfleet-'));
+    const projectCwd = path.join(project, 'app');
+    const definitionDir = path.join(project, '.agentfleet');
+    const promptsDir = path.join(definitionDir, 'prompts');
+    fs.mkdirSync(projectCwd, { recursive: true });
+    fs.mkdirSync(promptsDir, { recursive: true });
+    const inFleet = path.join(promptsDir, 'M1.txt');
+    fs.writeFileSync(inFleet, 'Build M1.\n');
+    const outside = path.join(os.tmpdir(), `af-outside-${Date.now()}.txt`);
+    fs.writeFileSync(outside, 'outside\n');
+    try {
+      const quiet = loop.validateDefinition(
+        {
+          name: 'fleet-inside',
+          cwd: projectCwd,
+          phases: [{ id: 'm1', promptFile: inFleet, eval: { command: ['true'], exitCode: 0 } }],
+        },
+        { definitionDir, checkCwd: false, checkPromptFiles: false }
+      );
+      assert.equal(quiet.ok, true, (quiet.errors || []).join('; '));
+      assert.equal((quiet.warnings || []).some((w) => /outside the project folder/.test(w)), false);
+
+      const warned = loop.validateDefinition(
+        {
+          name: 'fleet-outside',
+          cwd: projectCwd,
+          phases: [{ id: 'm1', promptFile: outside, eval: { command: ['true'], exitCode: 0 } }],
+        },
+        { definitionDir, checkCwd: false, checkPromptFiles: false }
+      );
+      assert.equal(warned.ok, true, (warned.errors || []).join('; '));
+      assert.ok((warned.warnings || []).some((w) => /outside the project folder/.test(w)));
+    } finally {
+      try {
+        fs.unlinkSync(outside);
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  });
+
   it('hello-aflt from-scratch seed validates in-project; seeded variant still dry-runs', () => {
     assert.ok(fs.existsSync(loopJson));
     assert.ok(fs.existsSync(path.join(exampleDir, 'install.sh')));
