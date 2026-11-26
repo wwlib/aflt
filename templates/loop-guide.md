@@ -6,6 +6,10 @@ A phase passes only when its check passes; on failure the agent gets the check
 output and up to `maxFixAttempts` tries to fix it. These rules come from real
 runs. Follow them unless the project docs clearly say otherwise.
 
+When `docs/guidance/*.md` exists (or SPEC.md points at it), **elaborate that
+brief** into fixtures, scorer scripts, and phase order. Human guidance wins over
+the defaults in this guide.
+
 ## 1. Tests and eval come first (M0)
 
 - The **first agent phase (`m0`) builds the test harness and an eval script**
@@ -30,7 +34,8 @@ runs. Follow them unless the project docs clearly say otherwise.
 - Later milestones re-run the whole test suite, so earlier work stays green.
   The milestone that matters most for quality also runs the eval
   (`... && node scripts/eval.js --json`) and can require a score with
-  `passRegex`.
+  `eval.minOverall`, per-tier `eval.minTiers`, and optional `eval.noRegress`
+  (or legacy `passRegex`).
 - Give slow checks a `timeoutSec` (default 300).
 
 ## 3. Script phases need no AI call
@@ -38,6 +43,9 @@ runs. Follow them unless the project docs clearly say otherwise.
 - Use `"type": "script"` for steps that are just a command: copying seed files,
   installing dependencies, running a benchmark. A script phase has an `eval`
   command (the step itself) and **no** `prompt`/`promptFile`. It costs nothing.
+- Script phases may set `eval.infraRetries` (and optional `infraExitCodes` /
+  `infraPattern`) so a single infrastructure timeout (for example a live eval
+  backend) retries instead of failing the whole loop.
 
 ## 4. Milestones
 
@@ -64,33 +72,74 @@ runs. Follow them unless the project docs clearly say otherwise.
 - Group phases by model (all builds, then planning). Every switch between
   models loses the prompt cache, so do not alternate.
 
-## 6. Approval gate after the first milestone
-
-- Put `"gate": "approve"` on the phase **right after `m0`** (normally `m1`).
-  The loop pauses there and reports the cost so far, so a person sees the
-  harness working before the loop spends more.
-
-## 7. Budget caps
+## 6. Budget caps
 
 - Always set `budget`: `maxRuns` (agent runs, including fix attempts),
   `maxHours` (active run time), and `maxPhases` (total phases including the
   ones plan-next adds). Size them from the budget you are given.
 - Copilot bills AI credits per token; keep prompts short and phases few.
 
-## 8. Improve rounds (optional, recommended when there is an eval)
+## 7. Improve rounds (optional, recommended when there is an eval)
 
 - End with one `"type": "plan-next"` phase (`"onPass": "none"`,
   `"maxFixAttempts": 2`, `"force": true` so it can write its plan file). After the milestones it reads the eval history and
   proposes improvement phases (`improve-r1`, ...).
+- Set `"targetOverall": 95` (or `eval.targetOverall`) on plan-next when the
+  spec names a target; the loop skips the planner AI call when the last **live**
+  line of `eval/history.jsonl` already meets the target.
 - Cap improve rounds at **3**: say so in the plan-next prompt ("stop after 3
   improve rounds, or when the eval score stops improving or reaches the
   target") and set `budget.maxPhases` to the number of phases you define
   plus 3 (one per improve round).
-- Set `"plannedPhaseGate": "none"` so the improve rounds run unattended
-  (the first-milestone gate already gave the human a checkpoint), unless the
-  user asked to approve every round.
+- Set `"plannedPhaseGate": "none"` so the improve rounds run unattended,
+  unless the user asked to approve every round.
 
-## 9. Keep the loop inside the project
+## 8. Eval contract (project eval milestone)
+
+Many projects (see human guidance) use a dedicated **eval milestone** after the
+real backend exists:
+
+- Build `eval/fixtures/transcript.json`, `scripts/eval/eval.js`, and tests with
+  mock mode (fast, deterministic) and optional `--live` against the real model
+  backend.
+- Eval JSON shape (printed to stdout on success):
+
+```json
+{
+  "overall": 87.5,
+  "mode": "mock",
+  "tiers": { "facts": 100, "updates": 80, "multihop": 75, "longgap": 90, "synthesis": 85, "persona": 95 },
+  "probes": [{ "id": "p1", "tier": "facts", "score": 100 }],
+  "weakest": "multihop"
+}
+```
+
+- **Tiers and weights** — define tier names and weights in the project scorer;
+  `overall` is the weighted summary (0–100).
+- **Checks** — prefer `eval.minOverall`, `eval.minTiers` (per-tier floors), and
+  `eval.noRegress` (compare to the previous live line in `eval/history.jsonl`)
+  instead of fragile regexes. Legacy `passRegex` still works when the contract
+  fields are omitted.
+- **Mock gate** — every feature milestone after the eval milestone runs
+  `node scripts/eval/eval.js --json` (mock) in its check.
+- **Freeze eval assets** — after the eval milestone, set loop-level
+  `"protected": { "paths": ["eval/fixtures/**", "scripts/eval/**"], "fromPhase": "<eval-milestone-id>" }`
+  so only that milestone (and earlier phases) could write those paths; later
+  phases and improve rounds must not edit them.
+- **Live eval script phase** — add `"type": "script"` with
+  `eval.command: node scripts/eval/eval.js --json --live --write`,
+  `eval.passRegex: "tiers"` (or contract fields), `eval.infraRetries: 1`, and a
+  generous `timeoutSec`. It costs no AI tokens.
+
+## 9. Approval gate after the eval milestone
+
+- Put `"gate": "approve"` on the phase **right after the eval milestone** (not
+  after `m0` unless there is no separate eval milestone), so a human reviews
+  the fixture, mock score, and live baseline before feature work continues.
+- Protected-path baselines are recorded **after** approval, so edits to
+  `loop.json` during the gate wait are allowed.
+
+## 10. Keep the loop inside the project
 
 - Every check command runs files inside the project (`npm test`,
   `node scripts/eval/eval.js`). No `../` paths and no scripts from other
@@ -100,7 +149,7 @@ runs. Follow them unless the project docs clearly say otherwise.
 - Prompt files live under `.agentfleet/prompts/` and are referenced relative
   to the loop JSON.
 
-## 10. Shape
+## 11. Shape
 
 ```json
 {
@@ -114,18 +163,24 @@ runs. Follow them unless the project docs clearly say otherwise.
   "acceptance": "<how we know it works, from SPEC.md>",
   "plannedPhaseGate": "none",
   "workdir": { "mode": "project" },
+  "protected": { "paths": ["eval/fixtures/**", "scripts/eval/**"], "fromPhase": "eval" },
   "allow": { "commit": true, "merge": false, "push": false },
   "budget": { "maxRuns": 30, "maxHours": 4, "maxPhases": 12 },
   "phases": [
     { "id": "m0", "promptFile": "prompts/m0.md", "force": true, "maxFixAttempts": 3,
       "onPass": "commit", "timeoutSec": 1800,
       "eval": { "command": "npm test && node scripts/eval.js --json", "timeoutSec": 600 } },
+    { "id": "eval", "promptFile": "prompts/eval.md", "force": true, "onPass": "commit",
+      "eval": { "command": "npm test && node scripts/eval/eval.js --json" } },
     { "id": "m1", "promptFile": "prompts/m1.md", "gate": "approve", "force": true,
-      "maxFixAttempts": 3, "onPass": "commit", "timeoutSec": 3600,
-      "eval": { "command": "npm test" } },
+      "maxFixAttempts": 3, "onPass": "commit",
+      "eval": { "command": "npm test && node scripts/eval/eval.js --json" } },
+    { "id": "live-eval", "type": "script",
+      "eval": { "command": "node scripts/eval/eval.js --json --live --write",
+        "passRegex": "tiers", "infraRetries": 1, "timeoutSec": 1800 } },
     { "id": "plan-next", "type": "plan-next", "model": "<strong planning model>",
-      "promptFile": "prompts/plan-next.md", "maxFixAttempts": 2, "onPass": "none",
-      "force": true }
+      "targetOverall": 95, "promptFile": "prompts/plan-next.md", "maxFixAttempts": 2,
+      "onPass": "none", "force": true }
   ]
 }
 ```

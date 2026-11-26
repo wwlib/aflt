@@ -90,7 +90,7 @@ Usage:
                             [--project NAME] [--force] [--messaging|--no-messaging]
                             [--tag T]... [--dry-run]
   aflt init <name> [--dir PATH] [--space NAME | --no-space] [--engine cursor|copilot|opencode]
-                            [--goal TEXT] [--stack TEXT] [--checks TEXT]
+                            [--goal TEXT] [--stack TEXT] [--checks TEXT] [--guidance FILE]
                             [--budget-credits N] [--budget-hours N] [--yes] [--existing]
                             [--isolated] [--force] [--json]
                             Start a looped project: folder (default ./<name>),
@@ -976,7 +976,8 @@ async function cmdInit(argv) {
   const isolated = recoverBoolFlag(flags, 'isolated', positional);
   const usage =
     'usage: aflt init <name> [--dir PATH] [--space NAME | --no-space] [--engine cursor|copilot|opencode]\n' +
-    '                 [--goal TEXT] [--stack TEXT] [--checks TEXT] [--budget-credits N] [--budget-hours N]\n' +
+    '                 [--goal TEXT] [--stack TEXT] [--checks TEXT] [--guidance FILE]\n' +
+    '                 [--budget-credits N] [--budget-hours N]\n' +
     '                 [--yes] [--existing] [--isolated] [--force] [--json]';
   if (flags.help || flags.h || positional[0] === 'help') {
     process.stdout.write(usage + '\n');
@@ -1013,6 +1014,7 @@ async function cmdInit(argv) {
       dir,
       space: noSpace ? false : currentSpaceName() || null,
       engine: engineName,
+      guidance: typeof flags.guidance === 'string' ? flags.guidance : null,
       ...answers,
       force,
       existing,
