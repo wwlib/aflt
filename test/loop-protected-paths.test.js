@@ -64,7 +64,7 @@ describe('protected-paths glob matcher', () => {
   it('normalizeProtected validates shape and paths', () => {
     assert.deepEqual(pp.normalizeProtected(undefined, 'd'), { ok: true, value: null });
     const ok = pp.normalizeProtected({ paths: ['a/**', './a/**', 'b'], source: 'base' }, 'd');
-    assert.deepEqual(ok.value, { paths: ['a/**', 'b'], source: 'base' });
+    assert.deepEqual(ok.value, { paths: ['a/**', 'b'], source: 'base', fromPhase: null });
     for (const bad of [
       [],
       { paths: [] },

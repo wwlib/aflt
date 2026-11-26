@@ -74,7 +74,7 @@ Regenerate the dashboard shots with `npm run screenshots` (needs Google Chrome, 
 
 ## What's new (unreleased)
 
-- **`aflt init` + `aflt loop init`** — start a looped project from `SPEC.md` / `AGENTS.md`: the engine drafts `.agentfleet/loop.json` and prompts, checked against [templates/loop-guide.md](templates/loop-guide.md) (tests + eval in M0, a real check on every phase, a gate after M0, budget caps). Tutorial: [docs/tutorial/14-new-project.md](docs/tutorial/14-new-project.md).
+- **`aflt init` + `aflt loop init`** — start a looped project from `SPEC.md` / `AGENTS.md`: optional `aflt init --guidance FILE` copies human eval briefs into `docs/guidance/`; the engine drafts `.agentfleet/loop.json` and prompts, checked against [templates/loop-guide.md](templates/loop-guide.md) (tests + eval, eval-contract fields, approval gate after the eval milestone when guidance says so, budget caps). Tutorial: [docs/tutorial/14-new-project.md](docs/tutorial/14-new-project.md).
 - **Gate cost so far**, **`improveModel`**, **`workdir.mode: "project"`**, prompt/check-script snapshots in the loop state, and isolation checks (`--isolated`). Details in [CHANGELOG.md](CHANGELOG.md).
 
 ## What's new (2026-11-24)

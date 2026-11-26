@@ -11,7 +11,7 @@
 ## Commands
 
 ```bash
-aflt init <name> [--dir PATH] [--engine E] [--yes] [--existing] [--isolated]   # new project: folder, git, space, SPEC/AGENTS
+aflt init <name> [--dir PATH] [--guidance FILE] [--engine E] [--yes] [--existing] [--isolated]   # new project: folder, git, space, SPEC/AGENTS
 aflt --space tutorial loop init [--engine E] [--build-model M --plan-model M] [--dry-run] [--force] [--isolated]
 aflt --space tutorial loop validate <file.json> [--json]
 aflt --space tutorial loop run <file.json> [--dry-run] [--json] [--fresh] [--force] [--allow-existing] [--create-worktree]
@@ -101,6 +101,10 @@ Before an unattended run, `aflt doctor --strict --loop <def.json>` checks that t
 - Cap growth with `budget.maxPhases`
 - `onPass` (`none`|`commit`|`merge`|`push`) only runs when loop-level `allow` flags permit (default all false)
 - Known gap: Copilot plan-next cannot yet write that plan file non-interactively (outside the game `-C` cwd); see [docs/copilot-live-test.md](../copilot-live-test.md) Known gaps.
+
+## Eval contract (phase checks)
+
+Project evaluators may print JSON like `{ "overall": 87, "mode": "live", "tiers": { ... } }`. Phase checks can use `eval.minOverall`, `eval.minTiers`, and `eval.noRegress` (compare to the previous live line in `eval/history.jsonl`) instead of brittle regexes; `passRegex` still works for older loops. Freeze harness paths with loop-level `protected: { "paths": ["eval/**", "scripts/eval/**"], "fromPhase": "eval" }` so only phases after the eval milestone (and planned improve rounds) are guarded. Put the approval gate on the phase after the eval milestone. Script `live-eval` phases can set `eval.infraRetries` so one backend timeout retries instead of failing the loop. See [`templates/loop-guide.md`](../../templates/loop-guide.md) §8–9.
 
 ## Stalled engines (idle timeout)
 

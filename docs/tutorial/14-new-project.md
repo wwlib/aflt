@@ -28,6 +28,9 @@ aflt init tile-dungeon --yes --engine cursor \
   --stack "Node 20, no dependencies" \
   --checks "npm test; node scripts/eval/eval.js --json" \
   --budget-credits 300 --budget-hours 4
+
+# Optional: seed eval requirements from a human brief (copied to docs/guidance/ and linked in SPEC.md)
+aflt init chat-agent --yes --guidance ~/path/to/eval-guidance.md
 ```
 
 It creates `./tile-dungeon` (or `--dir PATH`), runs `git init`, creates a space
@@ -58,8 +61,9 @@ aflt loop init --engine copilot --build-model auto --plan-model claude-sonnet-5.
 ```
 
 The engine runs headless with the loop-writing guide
-([`templates/loop-guide.md`](../../templates/loop-guide.md)) and your docs, and
-writes `.agentfleet/loop.json` plus one prompt file per phase under
+([`templates/loop-guide.md`](../../templates/loop-guide.md)), your docs, and every
+`docs/guidance/*.md` file (human guidance **overrides** guide defaults when they
+conflict), and writes `.agentfleet/loop.json` plus one prompt file per phase under
 `.agentfleet/prompts/`. Defaults: Cursor builds on `composer-2.5` and plans on
 `gpt-5.3-codex`; Copilot builds on `auto` and plans on `claude-sonnet-5.5`.
 
@@ -70,7 +74,7 @@ The draft must pass `aflt loop validate` **and** the checks policy:
 | M0 builds the test harness and an eval script, and its prompt says so | everything after it is judged by them |
 | every phase has a real check (`true`, `exit 0`, `echo`, `… \|\| true` are refused) | a phase that cannot fail teaches nothing |
 | checks run files inside the project (no `../` or outside scripts) | a missing outside file sends agents searching the disk |
-| the first milestone after M0 has `"gate": "approve"` (`--no-gate` to skip) | you see the harness and the cost before the long run |
+| an approval gate after the harness (after M0, or after a dedicated eval milestone when guidance says so) | you see fixtures/scores and the cost before feature work |
 | `budget.maxRuns` or `budget.maxHours` is set; plan-next has `budget.maxPhases` | runaway protection |
 | plan-next has `"force": true` | the planner must write its plan file |
 
