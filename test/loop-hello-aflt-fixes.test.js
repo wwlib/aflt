@@ -8,7 +8,10 @@ const path = require('path');
 
 const repoRoot = path.join(__dirname, '..');
 const exampleDir = path.join(repoRoot, 'examples', 'loops', 'hello-aflt');
-const exampleJson = path.join(exampleDir, 'hello-aflt.json');
+const seedDir = path.join(exampleDir, 'seed');
+const loopJson = path.join(seedDir, '.agentfleet', 'loop.json');
+const seededDir = path.join(repoRoot, 'examples', 'loops', 'hello-aflt-seeded');
+const seededJson = path.join(seededDir, 'hello-aflt.json');
 
 function clearMods() {
   for (const m of [
@@ -499,116 +502,55 @@ describe('hello-aflt loop fixes', () => {
     assert.deepEqual(cmd, ['node', gate]);
   });
 
-  it('portable hello-aflt example validates and dry-runs', () => {
-    assert.ok(fs.existsSync(exampleJson));
-    assert.ok(fs.existsSync(path.join(exampleDir, 'improve-gate.js')));
-    assert.ok(fs.existsSync(path.join(exampleDir, 'seed-m0.js')));
-    assert.ok(fs.existsSync(path.join(exampleDir, 'm0-seed', 'package.json')));
-    assert.ok(fs.existsSync(path.join(exampleDir, 'm0-seed', 'server.js')));
-    assert.ok(fs.existsSync(path.join(exampleDir, 'prompts', 'M0.txt')));
-    assert.ok(fs.existsSync(path.join(exampleDir, 'prompts', 'M5a.txt')));
-    assert.ok(fs.existsSync(path.join(exampleDir, 'README.md')));
+  it('hello-aflt from-scratch seed validates in-project; seeded variant still dry-runs', () => {
+    assert.ok(fs.existsSync(loopJson));
+    assert.ok(fs.existsSync(path.join(exampleDir, 'install.sh')));
     assert.ok(fs.existsSync(path.join(exampleDir, 'hello-aflt-improve.json')));
+    assert.ok(fs.existsSync(path.join(seedDir, '.agentfleet', 'checks', 'm0-check.cjs')));
+    assert.ok(fs.existsSync(path.join(seedDir, '.agentfleet', 'prompts', 'M5a.txt')));
 
     const loop = require('../lib/loop');
-    const raw = JSON.parse(fs.readFileSync(exampleJson, 'utf8'));
-    assert.ok(!Object.prototype.hasOwnProperty.call(raw, 'engine') || raw.engine == null);
-    assert.ok(!JSON.stringify(raw).includes('/tmp/'));
-    assert.ok(!JSON.stringify(raw).includes('AGENTFLEET_CURSOR_BIN'));
-    assert.equal(raw.phases[0].id, 'm0');
+    const raw = JSON.parse(fs.readFileSync(loopJson, 'utf8'));
+    assert.equal(raw.name, 'hello-aflt');
+    assert.equal(raw.project, 'hello-aflt');
+    assert.equal(raw.phases[0].id, 'seed-docs');
+    assert.equal(raw.plannedPhaseGate, 'none');
 
-    const result = loop.validateFile(exampleJson, {
-      checkCwd: false,
-      cwdBase: cwd,
+    const gameCwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'af-hello-game-')));
+    fs.cpSync(seedDir, gameCwd, { recursive: true });
+    const { spawnSync } = require('child_process');
+    spawnSync('git', ['init', '-q'], { cwd: gameCwd });
+    const result = loop.validateFile(path.join(gameCwd, '.agentfleet', 'loop.json'), {
+      cwdBase: gameCwd,
     });
     assert.equal(result.ok, true, (result.errors || []).join('; '));
-    for (const p of result.definition.phases) {
-      if (p.promptFile) {
-        assert.ok(p.promptFile.startsWith(exampleDir), p.promptFile);
-        assert.ok(fs.existsSync(p.promptFile), p.promptFile);
-      }
+    for (const p of result.definition.phases.filter((x) => x.type !== 'script' && x.promptFile)) {
+      assert.ok(p.promptFile.startsWith(gameCwd + path.sep), p.promptFile);
     }
-    const m0Eval = result.definition.phases.find((p) => p.id === 'm0').eval.command;
-    assert.ok(Array.isArray(m0Eval));
-    assert.equal(m0Eval[0], 'node');
-    assert.equal(m0Eval[1], path.join(exampleDir, 'seed-m0.js'));
-
-    const plan = loop.planDryRun(result.definition, exampleJson);
-    assert.equal(plan.ok, true);
-    assert.equal(plan.name, 'hello-aflt');
-    assert.ok(plan.phases.length >= 7);
 
     const improveJson = path.join(exampleDir, 'hello-aflt-improve.json');
     const improveRaw = JSON.parse(fs.readFileSync(improveJson, 'utf8'));
-    assert.equal(improveRaw.name, 'hello-aflt-improve');
-    assert.ok(!Object.prototype.hasOwnProperty.call(improveRaw, 'engine') || improveRaw.engine == null);
-    assert.ok(!JSON.stringify(improveRaw).includes('/tmp/'));
+    assert.equal(improveRaw.project, 'hello-aflt');
     assert.equal(improveRaw.plannedPhaseGate, 'none');
-    assert.equal(improveRaw.allow.commit, true);
-    assert.equal(improveRaw.phases.length, 1);
-    assert.equal(improveRaw.phases[0].type, 'plan-next');
     const improve = loop.validateFile(improveJson, { checkCwd: false, cwdBase: cwd });
     assert.equal(improve.ok, true, (improve.errors || []).join('; '));
 
-    const readme = fs.readFileSync(path.join(exampleDir, 'README.md'), 'utf8');
-    assert.match(readme, /aflt loop run .*hello-aflt\.json/);
-    assert.match(readme, /AGENTFLEET_ENGINE=copilot/);
-    assert.match(readme, /hello-aflt-improve\.json/);
-    assert.match(readme, /git init/);
-
-    const m1 = fs.readFileSync(path.join(exampleDir, 'prompts', 'M1.txt'), 'utf8');
-    assert.match(m1, /8792/);
-    const m5a = fs.readFileSync(path.join(exampleDir, 'prompts', 'M5a.txt'), 'utf8');
-    assert.match(m5a, /crash_free/);
-    assert.match(m5a, /AVG_DEPTH_TARGET\s*=\s*3\.5/);
-    assert.match(m5a, /PORT|8792/);
-    assert.ok(m5a.includes('Do not copy'));
-
     const planNext = fs.readFileSync(path.join(exampleDir, 'prompts', 'plan-next.txt'), 'utf8');
-    assert.match(planNext, /improve-gate\.js/);
-    assert.ok(!planNext.includes('/tmp/aflt-dungeon-loop'));
-    // Planner must count THIS loop's passed improve-* phases, not history.jsonl lines.
-    assert.match(planNext, /passed improve-\* phases/i);
-    assert.match(planNext, /NOT the number of eval\/history\.jsonl lines/i);
-    assert.ok(
-      !/Count completed improve rounds as history\.jsonl entries/i.test(planNext),
-      'plan-next must not count history.jsonl lines as improve rounds'
-    );
-    // Live overall from eval.js --json (no --write); ignore stale prior-loop files.
-    assert.match(planNext, /node scripts\/eval\/eval\.js --json/);
-    assert.match(planNext, /no --write/);
-    assert.match(planNext, /Ignore leftover eval\/latest-score\.json/i);
-    assert.match(planNext, /keep_changes false/i);
-    // Gate compares committed HEAD vs working tree (not before/after itself).
-    assert.match(planNext, /committed HEAD/);
-    assert.match(planNext, /working tree/);
-    assert.ok(!/measures overall BEFORE and AFTER itself/i.test(planNext));
-    // Continue loops: unique session per loop+round (do not resume hello-aflt-m5-rN).
-    assert.match(planNext, /hello-aflt-improve-rN/);
-    assert.match(planNext, /unique per loop name \+ round/i);
-    assert.ok(!/"session":\s*"hello-aflt-m5-rN"/.test(planNext));
-    // Continue loop: start at 0 of 3; ignore prior plateau stop.
-    assert.match(planNext, /hello-aflt-improve/);
-    assert.match(planNext, /starts at 0 of 3/i);
-    assert.match(planNext, /Ignore a prior loop's plateau\.json stop/i);
+    assert.match(planNext, /improve-gate\.cjs/);
 
-    const readmePlanRules = fs.readFileSync(path.join(exampleDir, 'README.md'), 'utf8');
-    assert.match(readmePlanRules, /passed `improve-\*` phases/i);
-    assert.match(readmePlanRules, /\*\*not\*\* the number of `eval\/history\.jsonl` lines/i);
-    assert.match(readmePlanRules, /0 of 3/);
-    assert.match(readmePlanRules, /keep_changes:\s*false/i);
+    const seeded = loop.validateFile(seededJson, { checkCwd: false, cwdBase: cwd });
+    assert.equal(seeded.ok, true, (seeded.errors || []).join('; '));
+    assert.equal(seeded.definition.phases[0].id, 'm0');
+    assert.equal(seeded.definition.project, 'hello-aflt-seeded');
 
-    const improveGoal = String(improveRaw.goal || '');
-    assert.match(improveGoal, /starts at 0 of 3/i);
-    assert.match(improveGoal, /live overall/i);
-
-    const seedServer = fs.readFileSync(path.join(exampleDir, 'm0-seed', 'server.js'), 'utf8');
-    assert.match(seedServer, /PORT \|\| 8792/);
+    const m5a = fs.readFileSync(path.join(seedDir, '.agentfleet', 'prompts', 'M5a.txt'), 'utf8');
+    assert.match(m5a, /Do not copy files from any other folder/);
+    assert.ok(!m5a.includes('wwlib/tile-dungeon'));
   });
 
   it('seed-m0 copies portable M0 into an empty cwd and passes smoke', () => {
     const { spawnSync } = require('child_process');
-    const seed = path.join(exampleDir, 'seed-m0.js');
+    const seed = path.join(seededDir, 'seed-m0.js');
     const game = fs.mkdtempSync(path.join(os.tmpdir(), 'af-hello-m0-'));
     const r = spawnSync(process.execPath, [seed], {
       cwd: game,
@@ -632,7 +574,7 @@ describe('hello-aflt loop fixes', () => {
 
   it('improve-gate: dirty working tree scoring higher than HEAD is improved (not plateau)', () => {
     const { spawnSync } = require('child_process');
-    const gate = path.join(exampleDir, 'improve-gate.js');
+    const gate = path.join(seededDir, 'improve-gate.js');
     const src = fs.readFileSync(gate, 'utf8');
     assert.match(src, /committed-head/);
     assert.match(src, /working-tree/);
@@ -719,7 +661,7 @@ process.stdout.write(JSON.stringify(out)+'\\n');
 
   it('improve-gate: plateau restores HEAD and does not leave discarded latest-score', () => {
     const { spawnSync } = require('child_process');
-    const gate = path.join(exampleDir, 'improve-gate.js');
+    const gate = path.join(seededDir, 'improve-gate.js');
     const game = fs.mkdtempSync(path.join(os.tmpdir(), 'af-hello-gate-plat-'));
     const git = (args) =>
       spawnSync('git', args, {

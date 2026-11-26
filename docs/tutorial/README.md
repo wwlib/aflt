@@ -55,9 +55,9 @@ Screenshots that may help while you read:
 - [dashboard-history.png](../images/dashboard-history.png) — History Gantt
 - [dashboard-sessions.png](../images/dashboard-sessions.png) — Sessions overview (project usage with Copilot credits and $)
 - [herdr.png](../images/herdr.png) — Herdr with the af sessions panel (predates the space picker)
-- [dashboard-loops.png](../images/dashboard-loops.png) — Loops view (hello-aflt-scratch run)
+- [dashboard-loops.png](../images/dashboard-loops.png) — Loops view (hello-aflt run)
 - [dashboard-loops-copilot.png](../images/dashboard-loops-copilot.png) — Loops view with Copilot credits and $
 - [dashboard-history-loop.png](../images/dashboard-history-loop.png) — a loop's phase sessions in History
 - [making-of.png](../images/making-of.png) — `aflt making-of` page (Cursor run)
 - [making-of-copilot-costs.png](../images/making-of-copilot-costs.png) — making-of with Copilot credits and $ per phase
-- [tile-dungeon-scratch.png](../images/tile-dungeon-scratch.png) — the game the hello-aflt-scratch loop built
+- [tile-dungeon-scratch.png](../images/tile-dungeon-scratch.png) — the game the hello-aflt loop built

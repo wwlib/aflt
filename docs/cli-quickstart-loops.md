@@ -68,53 +68,45 @@ export AFLT_SPACE=td-copilot
 export AGENTFLEET_ENGINE=copilot
 ```
 
-## 5. Validate and run hello-aflt
+## 5. Validate and run hello-aflt (from scratch)
+
+Default **hello-aflt** is docs-only: no game code or HTML in the seed. The loop,
+prompts, and checks live under `.agentfleet/` inside your project folder.
+`plannedPhaseGate: "none"` is intentional (improve phases need no approval gate).
 
 Replace `AFLT_HOME` with your clone path.
 
 ```bash
 AFLT_HOME=~/github/wwlib/aflt
+mkdir -p ~/aflt-projects/td && cd ~/aflt-projects/td
+"$AFLT_HOME/examples/loops/hello-aflt/install.sh"
+# or: cp -R "$AFLT_HOME/examples/loops/hello-aflt/seed/." .
+git init -b main && git add -A && git commit -m "Seed hello-aflt"
+export AFLT_SPACE=td-copilot   # optional isolated space
 
-aflt loop validate "$AFLT_HOME/examples/loops/hello-aflt/hello-aflt.json" --json
-aflt loop run "$AFLT_HOME/examples/loops/hello-aflt/hello-aflt.json" --dry-run --json
-
-aflt loop run "$AFLT_HOME/examples/loops/hello-aflt/hello-aflt.json"
+aflt loop validate .agentfleet/loop.json --json
+aflt loop run .agentfleet/loop.json --dry-run --json
+aflt loop run .agentfleet/loop.json
 ```
+
+The first phase, `seed-docs`, is a script phase (no AI call) that checks the repo
+holds only the seed. M0 is a real agent build from `SPEC.md`, checked by
+`.agentfleet/checks/m0-check.cjs`.
 
 ### Background / scheduler (optional)
 
-Does not block this terminal; dashboard scheduler runs phases when the server is up:
-
 ```bash
-aflt loop start "$AFLT_HOME/examples/loops/hello-aflt/hello-aflt.json" --json
+aflt loop start .agentfleet/loop.json --json
 aflt dashboard --serve --port 8787
 ```
 
-Then `aflt loop status hello-aflt --json`, `aflt loop pause hello-aflt`, `aflt loop resume hello-aflt`, `aflt loop stop hello-aflt`.
+Then `aflt loop status hello-aflt --json`, pause / resume / stop.
 
-### Variant: build M0 from scratch (no seed code)
+### Non-default: copy M0 in with a script (`hello-aflt-seeded`)
 
-`examples/loops/hello-aflt-scratch/` runs the same milestones, but the seed is
-instructions only (`AGENTS.md`, `SPEC.md`, `.agentfleet.json`, `.gitignore`)
-plus the loop itself in `.agentfleet/` (`loop.json`, prompts, and two check
-scripts): no game code, no HTML. Everything the loop uses lives inside the
-project folder. M0 is a real agent build of the scaffold, checked by
-`.agentfleet/checks/m0-check.cjs` (structure + `node --test` + server boot). Use
-a new empty folder (not inside another repo) and its own space:
-
-```bash
-mkdir -p ~/aflt-projects/td-scratch && cd ~/aflt-projects/td-scratch
-cp -R "$AFLT_HOME/examples/loops/hello-aflt-scratch/seed/." .
-aflt init td-scratch --dir . --yes --engine cursor --isolated   # git init + space td-scratch
-git add -A && git commit -m "Seed hello-aflt-scratch"
-aflt --space td-scratch loop validate .agentfleet/loop.json --json
-aflt --space td-scratch loop run .agentfleet/loop.json
-```
-
-The first phase, `seed-docs`, is a script phase (no AI call) that checks the repo holds only the seed, so no leftover code leaks into a from-scratch run.
-
-Status: `aflt loop status hello-aflt-scratch --json`. Details:
-[examples/loops/hello-aflt-scratch/README.md](../examples/loops/hello-aflt-scratch/README.md).
+[`examples/loops/hello-aflt-seeded/`](../examples/loops/hello-aflt-seeded/README.md) —
+`aflt loop run "$AFLT_HOME/examples/loops/hello-aflt-seeded/hello-aflt.json"` from an
+empty `git init` repo (M0 = `seed-m0.js`, no AI call).
 
 ## 6. Watch the dashboard
 
@@ -124,7 +116,7 @@ AFLT_SPACE=td-copilot aflt dashboard --serve --port 8787
 
 Open `http://127.0.0.1:8787/` → Loops tab. Each loop has a **Making of** button (`http://127.0.0.1:8787/making-of/hello-aflt`). If another dashboard already listens on 8787 (for example the default space's), pass a free `--port`; each named space also records its own port (`aflt space ls`).
 
-![Loops tab: hello-aflt-scratch completed with eval scores per phase](images/dashboard-loops.png)
+![Loops tab: hello-aflt completed with eval scores per phase](images/dashboard-loops.png)
 
 History shows the loop master with one session per phase:
 
@@ -132,7 +124,7 @@ History shows the loop master with one session per phase:
 
 The game itself runs from the game repo (`npm start`, default `http://127.0.0.1:8792/`; `?seed=42` gives a repeatable map):
 
-![The tile dungeon built by hello-aflt-scratch](images/tile-dungeon-scratch.png)
+![The tile dungeon built by hello-aflt](images/tile-dungeon-scratch.png)
 
 ## 7. See exactly how it was built (making of)
 
@@ -186,10 +178,11 @@ cd ~/github/wwlib/aflt && npm link
 npm install -g @github/copilot && copilot
 export PATH="$HOME/.local/bin:$PATH"
 aflt doctor --strict
-mkdir -p ~/tmp/td && cd ~/tmp/td && git init -b main
+mkdir -p ~/tmp/td && cd ~/tmp/td && ~/github/wwlib/aflt/examples/loops/hello-aflt/install.sh
+git init -b main && git add -A && git commit -m "Seed hello-aflt"
 export AFLT_SPACE=td-copilot AGENTFLEET_ENGINE=copilot
 # optional: export COPILOT_MODEL=...
-aflt loop run ~/github/wwlib/aflt/examples/loops/hello-aflt/hello-aflt.json
+aflt loop run .agentfleet/loop.json
 # another terminal:
 AFLT_SPACE=td-copilot aflt dashboard --serve --port 8787
 ```
@@ -203,9 +196,10 @@ curl https://cursor.com/install -fsS | bash
 export PATH="$HOME/.local/bin:$PATH"
 cursor-agent status
 aflt doctor --strict
-mkdir -p ~/tmp/td && cd ~/tmp/td && git init -b main
+mkdir -p ~/tmp/td && cd ~/tmp/td && ~/github/wwlib/aflt/examples/loops/hello-aflt/install.sh
+git init -b main && git add -A && git commit -m "Seed hello-aflt"
 export AFLT_SPACE=td-cursor AGENTFLEET_ENGINE=cursor
-aflt loop run ~/github/wwlib/aflt/examples/loops/hello-aflt/hello-aflt.json
+aflt loop run .agentfleet/loop.json
 # another terminal:
 AFLT_SPACE=td-cursor aflt dashboard --serve --port 8787
 ```

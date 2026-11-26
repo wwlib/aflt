@@ -2,7 +2,7 @@
 
 A browser-playable, tile-based dungeon roguelike in plain Node.js and HTML5
 Canvas with zero runtime dependencies. Built milestone by milestone by AI
-agents driven by the `aflt` loop in `.agentfleet/loop.json` (hello-aflt-scratch).
+agents driven by the `aflt` loop in `.agentfleet/loop.json` (hello-aflt).
 
 This file is the contract. The repo ships with no code; agents create all of it.
 

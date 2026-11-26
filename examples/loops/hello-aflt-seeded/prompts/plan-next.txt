@@ -1,4 +1,4 @@
-You are planning the next eval-gated improvement round for the hello-aflt-scratch tile-dungeon loop (built from a docs-only seed; or stopping).
+You are planning the next eval-gated improvement round for the hello-aflt tile-dungeon loop (or stopping).
 
 Read-only context you must inspect:
 - THIS loop's state: the "## Loop history (recent)" block in your prompt (passed improve-* phases), and optionally $AGENTFLEET_HOME/loops/<loop-name>/state.json. That is the only source of truth for how many improve rounds THIS loop has already kept.
@@ -15,21 +15,21 @@ Hard rules:
    - live overall (from rule 2) is >= 99.0, OR
    - THIS loop's own improve gate just reported plateau or regression (keep_changes false / stop true from a gate run belonging to this loop), OR
    - acceptance is otherwise met.
-5. Continue loops (hello-aflt-improve or a re-run of this loop): THIS loop starts at 0 of 3 rounds regardless of leftover history.jsonl / latest-score.json / plateau.json from a prior loop. Ignore a prior loop's plateau.json stop flag. Stop only for THIS loop's own gate plateau/regression, THIS loop reaching 3 kept rounds, or live overall >= 99.
+5. hello-aflt-improve continue loops: THIS loop starts at 0 of 3 rounds regardless of leftover history.jsonl / latest-score.json / plateau.json from a prior hello-aflt loop. Ignore a prior loop's plateau.json stop flag. Stop only for THIS loop's own gate plateau/regression, THIS loop reaching 3 kept rounds, or live overall >= 99.
 6. If continuing, propose exactly ONE improve phase (not a bundle of phases). Use this shape (change the id and session per round).
-   Session titles must be unique per loop name + round so continue loops do not resume an old chat (e.g. hello-aflt-scratch-r1, not hello-aflt-m5-r1). For this hello-aflt-scratch loop use hello-aflt-scratch-rN.
+   Session titles must be unique per loop name + round so continue loops do not resume an old chat (e.g. hello-aflt-improve-r1, not hello-aflt-m5-r1). For the initial hello-aflt loop use hello-aflt-rN.
    Do NOT pin engine to cursor — omit engine so the loop default / AGENTFLEET_ENGINE applies (copilot works on a work Mac with no Cursor).
-   The improve-gate script is part of this project: .agentfleet/checks/improve-gate.cjs, run from the game repo root. Use exactly that path; never a path outside the project (no ../, no /tmp, no other folders):
+   The improve-gate script lives next to this loop definition (hello-aflt/ or hello-aflt-improve.json’s directory). Prefer the relative basename; aflt resolves it against the definition directory (not the game cwd, not /tmp):
    {
      "id": "improve-rN",
-     "session": "hello-aflt-scratch-rN",
+     "session": "hello-aflt-improve-rN",
      "gate": "none",
      "force": true,
      "maxFixAttempts": 3,
      "onPass": "commit",
      "timeoutSec": 5400,
      "eval": {
-       "command": ["node", ".agentfleet/checks/improve-gate.cjs"],
+       "command": ["node", "improve-gate.js"],
        "exitCode": 0,
        "timeoutSec": 1200
      },

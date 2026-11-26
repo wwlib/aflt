@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * M0 check for hello-aflt-scratch (portable Node, zero deps).
+ * M0 check for hello-aflt (portable Node, zero deps).
  *
  * Lives inside the project (.agentfleet/checks/), next to the loop, so a run
  * never needs files outside the project folder. It never copies code: the M0

@@ -601,7 +601,7 @@ process.stdout.write('{}\\n');
     const pkg = require('../package.json');
     assert.match(pkg.engines.node, />=20\.10/);
     const server = fs.readFileSync(
-      path.join(repoRoot, 'examples/loops/hello-aflt/m0-seed/server.js'),
+      path.join(repoRoot, 'examples/loops/hello-aflt-seeded/m0-seed/server.js'),
       'utf8'
     );
     assert.match(server, /HOST \|\| '127\.0\.0\.1'/);

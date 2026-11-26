@@ -43,9 +43,9 @@ Install the panel and layout with `aflt setup --apply --herdr` (or `aflt herdr-a
 
 ### Loops: the tile-dungeon runs
 
-`aflt loop` building the [hello-aflt](examples/loops/hello-aflt/) tile-dungeon roguelike end to end. Below: the [docs-only `hello-aflt-scratch`](examples/loops/hello-aflt-scratch/) variant on Cursor `composer-2.5` (no seed code or HTML; every phase passed, eval 85.2 after M5a → 89.9 after three improve rounds).
+`aflt loop` building the [hello-aflt](examples/loops/hello-aflt/) tile-dungeon roguelike from scratch (docs-only seed; no game code or HTML). Example run on Cursor `composer-2.5`: every phase passed, eval 85.2 after M5a → 89.9 after three improve rounds.
 
-![aflt dashboard Loops view: hello-aflt-scratch completed, phase tree m0–m5a, improve-r1–r3 with eval scores](docs/images/dashboard-loops.png)
+![aflt dashboard Loops view: hello-aflt completed, phase tree m0–m5a, improve-r1–r3 with eval scores](docs/images/dashboard-loops.png)
 *Loops view (`aflt dashboard --serve`, space `scratch-composer`): status, engine/model, Started / Updated in local time, active elapsed time (20m 53s, not the 3 h wall clock since the first run), budget, token rollup, step pipeline, phase tree with eval scores, and the **Making of** button. Stop is grey and disabled because the loop has completed.*
 
 ![aflt dashboard Loops view for a Copilot run: tokens, AI credits and dollars](docs/images/dashboard-loops-copilot.png)
@@ -64,7 +64,7 @@ Install the panel and layout with `aflt setup --apply --herdr` (or `aflt herdr-a
 
 `aflt making-of <loop>` (or **Making of** on the Loops tab, `/making-of/<loop>`) shows every AI call, commit, diff and artifact of a loop run, with tokens and, for Copilot, the AI credits and dollars Copilot recorded.
 
-![Making-of page for hello-aflt-scratch: summary tiles, phase timeline and per-phase table](docs/images/making-of.png)
+![Making-of page for hello-aflt: summary tiles, phase timeline and per-phase table](docs/images/making-of.png)
 *Cursor run: 227 AI steps, 510 tool calls, 9.30M input tokens, 9 commits; Cursor reports no cost, so none is shown.*
 
 ![Making-of page for a Copilot Claude Sonnet 5.5 hello-aflt run with AI credits and dollars per phase](docs/images/making-of-copilot-costs.png)
@@ -83,7 +83,7 @@ Regenerate the dashboard shots with `npm run screenshots` (needs Google Chrome, 
 - **Recorded calls** — each loop phase archives the engine's own record under `runs/<session>/engine/` and writes `runs/<session>/calls.jsonl` (one line per model call) and `session-context.json`. Loop phases run Cursor with `--output-format stream-json`.
 - **Usage fixes** — `usage-summary.json` counts a headless run once (`dedupedTurns`); Copilot usage carries `credits` / `usd` / `costBasis` from `copilotUsage.totalNanoAiu` (1e9 nano-AIU = 1 credit = $0.01). Nothing is estimated.
 - **`type: "script"` loop phases** — the eval command is the step: no AI call, session, fix attempts or `maxRuns` budget. hello-aflt's `m0` seeds this way.
-- **`hello-aflt-scratch`** — [`examples/loops/hello-aflt-scratch/`](examples/loops/hello-aflt-scratch/): the same tile-dungeon milestones from a docs-only seed (`AGENTS.md`, `SPEC.md`; no code or HTML); M0 is a real agent build checked by `m0-check.js`.
+- **`hello-aflt`** — [`examples/loops/hello-aflt/`](examples/loops/hello-aflt/): default tile-dungeon loop from a docs-only seed (`install.sh` or `seed/`); M0 is a real agent build checked by `.agentfleet/checks/m0-check.cjs`. Non-default [`hello-aflt-seeded`](examples/loops/hello-aflt-seeded/) copies M0 in with a script phase.
 - **Herdr space picker + `aflt space ls`** — the af sessions panel lists every aflt space (`aflt space ls --json`) and passes `--space` to `ls` / `resume` / `adopt`; `space ls` is an alias of `space list`.
 - **Self-improving loop** — `examples/loops/self-improve.json` runs in a worktree with engine failover, protected paths, cheap-first verify tiers, commit-gate trailers and `needs_human` escalation; `aflt doctor --strict` preflight. Runbook: [docs/self-improve-runbook.md](docs/self-improve-runbook.md).
 
@@ -134,7 +134,7 @@ CLI coding agents are powerful but ephemeral: chat IDs live in engine-local stor
 | **Modes** | Interactive TUI (Herdr by default when `hc` is on PATH) vs headless `aflt run` / spawn |
 | **Herdr** | `hc` terminals + desktop app spaces/tabs + bundled `af-sessions` panel; shell-only reboot recovery via in-tab relaunch |
 | **Orchestration** | `aflt master`, `aflt spawn [--detach]`, `children`, `wait`, `result [--require-fresh]`, `tail`, `send`, `stop`, `rm --children` |
-| **Loop** | `aflt loop` multi-phase eval/fix runner (`validate` / `run [--dry-run\|--fresh]` / `start` / `status` / `pause` / `resume` / `stop` / `approve`; JSON definition with `run`, `script` and `plan-next` phases; state under `loops/`; opt-in notify + memory; examples [`hello-aflt`](examples/loops/hello-aflt/) and [`hello-aflt-scratch`](examples/loops/hello-aflt-scratch/)) |
+| **Loop** | `aflt loop` multi-phase eval/fix runner (`validate` / `run [--dry-run\|--fresh]` / `start` / `status` / `pause` / `resume` / `stop` / `approve`; JSON definition with `run`, `script` and `plan-next` phases; state under `loops/`; opt-in notify + memory; examples [`hello-aflt`](examples/loops/hello-aflt/) and [`hello-aflt-seeded`](examples/loops/hello-aflt-seeded/)) |
 | **Making of** | `aflt making-of <loop>` — every AI call, commit, diff and artifact of a loop run, with tokens and recorded Copilot credits / $; `/making-of/<loop>` on the dashboard |
 | **Eval** | `aflt eval measure` / `score` / `report` / `gate` / `plateau` — hermetic measure → rubric score → improve gate + self-improve loop example |
 | **Projects** | Optional `session.project` + `aflt ls --project` / `aflt timeline` / `aflt projects` (repo mappings + validation) |
@@ -524,10 +524,12 @@ aflt loop approve <name>                    # release gate: "approve"
 # Portable Copilot-friendly example (empty git repo cwd; set AGENTFLEET_ENGINE=copilot once)
 # export AGENTFLEET_ENGINE=copilot
 # # optional: export COPILOT_MODEL=auto
-# aflt loop validate examples/loops/hello-aflt/hello-aflt.json --json
-# aflt loop run examples/loops/hello-aflt/hello-aflt.json --dry-run   # from empty git repo cwd
-# aflt loop run examples/loops/hello-aflt/hello-aflt.json --fresh
-# Docs-only seed variant: copy examples/loops/hello-aflt-scratch/seed/ into an empty repo, then aflt loop run .agentfleet/loop.json
+# examples/loops/hello-aflt/install.sh  # into an empty project folder
+# git init && commit, then:
+# aflt loop validate .agentfleet/loop.json --json
+# aflt loop run .agentfleet/loop.json --dry-run
+# aflt loop run .agentfleet/loop.json --fresh
+# Seeded M0 (non-default): aflt loop run examples/loops/hello-aflt-seeded/hello-aflt.json
 # See docs/cli-quickstart-loops.md, examples/loops/hello-aflt/README.md and docs/copilot-live-test.md
 
 # Unattended host (scheduler + activity UI + Loops view)
@@ -546,8 +548,8 @@ aflt space remove lab --force
 ```
 
 - **Definition (JSON):** `name`, `project`, `cwd`, `engine` (optional; omit to follow `AGENTFLEET_ENGINE` / config), optional ordered failover `engines` (primary precedence: phase `engine` > `engine` > `AGENTFLEET_ENGINE` > `engines[0]` > config > cursor; on `cli_missing`/`auth_required`/`usage_limit`/`rate_limit`/`model_unavailable` a phase reruns the same attempt on the next installed engine with session `<session>-<engine>`, never on an eval failure; notify/history `loop.engine.failover`), `allow` (`commit`/`merge`/`push`, default false), `budget` (`maxRuns`/`maxHours`/`maxPhases`), optional `goal`, `acceptance` (or `acceptanceCriteria`), `acceptanceEval`, `plannedPhaseGate` (`approve`|`none`, default `approve` for phases inserted by plan-next), `phases[]` with `id`, optional `type` (`run`|`plan-next`|`script`), `engine`, `session`, `prompt` or `promptFile`, `eval` (`command` string or argv array, `passRegex` and/or `exitCode`), `maxFixAttempts` (default 3), `onPass` (`none`|`commit`|`merge`|`push`), optional `gate: "approve"`. Relative `promptFile` / companion scripts resolve against the definition directory. UI-saved files: `$AGENTFLEET_HOME/loops/definitions/<name>.json` (or `config.json` `loop.definitionsDir` / `loopsDir`). Examples: `examples/loops/hello-eval.json`, `examples/loops/plan-next.json`, `examples/loops/self-improve.json`, `examples/loops/hello-aflt/`, `examples/loops/hello-aflt-scratch/`.
-- **Script phases:** `type: "script"` makes the phase's `eval.command` the whole step — no AI call, no prompt or session, no fix attempts, not counted in `budget.maxRuns`; `onPass` still applies. Use it for seeding or setup (hello-aflt `m0`, hello-aflt-scratch `seed-docs`).
-- **hello-aflt / improve-gate:** [`examples/loops/hello-aflt/`](examples/loops/hello-aflt/) is the portable tile-dungeon loop (M0 seed via a script phase → M1–M5a → ≤3 plan-next improve rounds). [`examples/loops/hello-aflt-scratch/`](examples/loops/hello-aflt-scratch/) runs the same milestones from a docs-only seed (an agent writes M0 too). It omits `engine` so Copilot works via `AGENTFLEET_ENGINE=copilot` / `aflt engine copilot`. Planned improve phases eval with `["node","improve-gate.js"]` (definition-dir resolved): compares **committed HEAD** gameplay vs the **working tree**, prints a JSON `overall` line for Loops `evalScore`, keeps improvements or restores HEAD on plateau. Continue-only: `hello-aflt-improve.json`. Work-Mac walkthrough: [docs/copilot-live-test.md](docs/copilot-live-test.md).
+- **Script phases:** `type: "script"` makes the phase's `eval.command` the whole step — no AI call, no prompt or session, no fix attempts, not counted in `budget.maxRuns`; `onPass` still applies. hello-aflt `seed-docs` and hello-aflt-seeded `m0` use this.
+- **hello-aflt:** [`examples/loops/hello-aflt/`](examples/loops/hello-aflt/) is the default from-scratch tile-dungeon loop (`seed-docs` → agent M0 → M1–M5a → ≤3 improve rounds; `plannedPhaseGate: "none"`). Loop, prompts, and checks live in the project (`.agentfleet/`); `install.sh` copies the seed. Improve rounds use `node .agentfleet/checks/improve-gate.cjs` (HEAD vs working tree). Continue-only: `hello-aflt-improve.json`. Non-default [`hello-aflt-seeded`](examples/loops/hello-aflt-seeded/) copies M0 with `seed-m0.js`. Work-Mac walkthrough: [docs/copilot-live-test.md](docs/copilot-live-test.md).
 - **`--fresh`:** without it, a completed loop returns `loop already completed` and does no work. With `--fresh`, start a new state (0 of N) in the **same** fleethome (prefer over a new space so the default Loops view still shows the run). Fresh runs mint new planner / loop-root sessions.
 - **Semantics:** run phase prompt → run eval → on fail send failing output back to the same session as a fix prompt (up to `maxFixAttempts`) → mark phase passed/failed. With `gate: "approve"`, the runner pauses (`status=waiting`) before the phase work until approve. Prompts are argv data (no shell interpolation).
 - **Plan-next (M4):** `type: "plan-next"` gives the configured engine the goal, history, and status notes and requires JSON at `$AGENTFLEET_HOME/loops/<name>/plan-next.json`. `{ "done": true }` ends planning (then optional `acceptanceEval` + completion); `{ "phases": [ … ] }` validates and inserts phases before the plan-next sentinel (default gate from `plannedPhaseGate`). Cap with `budget.maxPhases`. When `goal`/`acceptance` are set, completion writes an acceptance-summary status note.
@@ -831,7 +833,7 @@ See `af --help` / `aflt help` for the authoritative flag list. Long-form help co
 - [docs/cli-quickstart-loops.md](docs/cli-quickstart-loops.md) — run the hello-aflt loop from the CLI, watch it, review it with `aflt making-of`
 - [docs/copilot-live-test.md](docs/copilot-live-test.md) — Copilot-only live test of hello-aflt (results template)
 - [docs/self-improve-runbook.md](docs/self-improve-runbook.md) / [docs/self-improving-loop-design.md](docs/self-improving-loop-design.md) — self-improving loop runbook and design
-- [examples/loops/](examples/loops/) — loop definitions (`hello-eval`, `plan-next`, `self-improve`, [`hello-aflt`](examples/loops/hello-aflt/README.md), [`hello-aflt-scratch`](examples/loops/hello-aflt-scratch/README.md))
+- [examples/loops/](examples/loops/) — loop definitions (`hello-eval`, `plan-next`, `self-improve`, [`hello-aflt`](examples/loops/hello-aflt/README.md), [`hello-aflt-seeded`](examples/loops/hello-aflt-seeded/README.md))
 - [completions/af.bash](completions/af.bash) — bash completion
 - [herdr/mods/af-sessions](herdr/mods/af-sessions) — Herdr desktop panel mod (`RECIPE.md`)
 - [herdr/layouts/af.json](herdr/layouts/af.json) — layout that includes the panel
@@ -842,7 +844,7 @@ See `af --help` / `aflt help` for the authoritative flag list. Long-form help co
 npm test
 ```
 
-944 tests (Node test runner): 943 passing and 1 skipped in the hermetic suite (the skipped live `create-chat` smoke test only runs with a real `cursor-agent`). Coverage includes registry, engines, Herdr backends and the af sessions panel space picker, orchestration, messaging, MCP, docs and tutorial commands, project/timeline, project memory, live dashboard (local-time stamps, Stop state, loop credits), loops (active-time budget, script phases, verify tiers, commit gate, escalation, failover, hello-aflt and hello-aflt-scratch), making-of, usage, named spaces, eval, dry-run purity, interactive rm/stop pickers, and hermetic `AGENTFLEET_HOME` fixtures.
+944 tests (Node test runner): 943 passing and 1 skipped in the hermetic suite (the skipped live `create-chat` smoke test only runs with a real `cursor-agent`). Coverage includes registry, engines, Herdr backends and the af sessions panel space picker, orchestration, messaging, MCP, docs and tutorial commands, project/timeline, project memory, live dashboard (local-time stamps, Stop state, loop credits), loops (active-time budget, script phases, verify tiers, commit gate, escalation, failover, hello-aflt and hello-aflt-seeded), making-of, usage, named spaces, eval, dry-run purity, interactive rm/stop pickers, and hermetic `AGENTFLEET_HOME` fixtures.
 
 ## Versioning and releases
 

@@ -97,7 +97,7 @@ aflt --space copilot-live space current --json
 
 ## Select the Copilot engine
 
-`hello-aflt.json` **omits** `engine`, so phases inherit:
+Hello-aflt's `.agentfleet/loop.json` **omits** `engine`, so phases inherit:
 
 `--engine` (n/a on loop) → `AGENTFLEET_ENGINE` → `$AGENTFLEET_HOME/config.json` `defaultEngine` → builtin `cursor`
 
@@ -134,7 +134,7 @@ export COPILOT_MODEL=auto
 # printf '%s\n' '{ "defaultEngine": "copilot", "defaultModel": "auto" }' > config via aflt, or edit the space config.json
 ```
 
-`hello-aflt.json` does not pin `model`. Without `COPILOT_MODEL` or `defaultModel`, each phase starts on the account default and falls back to `auto` if that model is unavailable. Pin a model when you want repeatable runs.
+The in-project loop (`.agentfleet/loop.json`) does not pin `model`. Without `COPILOT_MODEL` or `defaultModel`, each phase starts on the account default and falls back to `auto` if that model is unavailable. Pin a model when you want repeatable runs.
 
 ---
 
@@ -143,7 +143,11 @@ export COPILOT_MODEL=auto
 From any cwd (path to the definition is absolute or relative to your shell):
 
 ```bash
-AFLT_DEF=/path/to/aflt/examples/loops/hello-aflt/hello-aflt.json
+AFLT_HOME=/path/to/aflt
+mkdir -p ~/tmp/tile-dungeon-live && cd ~/tmp/tile-dungeon-live
+"$AFLT_HOME/examples/loops/hello-aflt/install.sh"
+git init -b main && git add -A && git commit -m "Seed hello-aflt"
+AFLT_DEF=.agentfleet/loop.json
 
 aflt --space copilot-live loop validate "$AFLT_DEF"
 aflt --space copilot-live loop validate "$AFLT_DEF" --json
@@ -166,7 +170,7 @@ aflt --space copilot-live loop run "$AFLT_DEF" --dry-run
 aflt --space copilot-live loop run "$AFLT_DEF" --dry-run --json
 ```
 
-Expect phase lines for `m0` … improve/`plan-next` with engine resolved to `copilot` when the default is set, `force=true` (hello-aflt opts in), and `model=` from `COPILOT_MODEL` / config when set. No `state.json` runner progress for a dry-run.
+Expect phase lines for `seed-docs`, `m0` … improve/`plan-next` with engine resolved to `copilot` when the default is set, `force=true` (hello-aflt opts in), and `model=` from `COPILOT_MODEL` / config when set. `plannedPhaseGate: "none"` is intentional. No `state.json` runner progress for a dry-run.
 
 ---
 
@@ -176,7 +180,8 @@ Create an empty game repo (or use an existing one). `"cwd": "."` in the definiti
 
 ```bash
 mkdir -p ~/tmp/tile-dungeon-live && cd ~/tmp/tile-dungeon-live
-git init
+/path/to/aflt/examples/loops/hello-aflt/install.sh
+git init -b main && git add -A && git commit -m "Seed hello-aflt"
 
 export AGENTFLEET_ENGINE=copilot
 export AFLT_SPACE=copilot-live
@@ -184,19 +189,15 @@ export AFLT_SPACE=copilot-live
 
 # First run in this fleethome — --fresh is optional but safe.
 # Re-running after status=completed REQUIRES --fresh (else: "loop already completed").
-# A fresh empty git repo does not need --allow-existing.
-# hello-aflt sets force:true on each phase (full Copilot tool access). Omit that
-# and the default is restricted unless you pass --force.
-aflt loop run /path/to/aflt/examples/loops/hello-aflt/hello-aflt.json --fresh
-# or with explicit space flag:
-# aflt --space copilot-live loop run /path/to/aflt/examples/loops/hello-aflt/hello-aflt.json --fresh --json
+aflt loop run .agentfleet/loop.json --fresh
+# aflt --space copilot-live loop run .agentfleet/loop.json --fresh --json
 ```
 
 `aflt loop run` stays in the foreground. To detach it, log stdout/stderr and keep the pid:
 
 ```bash
 mkdir -p ~/tmp
-nohup aflt loop run /path/to/aflt/examples/loops/hello-aflt/hello-aflt.json --fresh \
+nohup aflt loop run .agentfleet/loop.json --fresh \
   > ~/tmp/aflt-copilot-live-run.log 2>&1 &
 echo $! > ~/tmp/aflt-copilot-live-run.pid
 # later:
@@ -402,8 +403,11 @@ export COPILOT_MODEL=auto
 aflt engine copilot
 
 # empty game repo first (cwd guard), then validate → dry-run → live
-DEF=/path/to/aflt/examples/loops/hello-aflt/hello-aflt.json
-mkdir -p ~/tmp/tile-dungeon-live && cd ~/tmp/tile-dungeon-live && git init
+AFLT_HOME=/path/to/aflt
+mkdir -p ~/tmp/tile-dungeon-live && cd ~/tmp/tile-dungeon-live
+"$AFLT_HOME/examples/loops/hello-aflt/install.sh"
+git init -b main && git add -A && git commit -m "Seed hello-aflt"
+DEF=.agentfleet/loop.json
 aflt loop validate "$DEF" --json
 aflt loop run "$DEF" --dry-run --json
 aflt loop run "$DEF" --fresh
