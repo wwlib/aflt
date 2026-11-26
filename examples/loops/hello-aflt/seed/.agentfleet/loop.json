@@ -1,9 +1,12 @@
 {
   "name": "hello-aflt",
-  "project": "tile-dungeon-loop",
+  "project": "hello-aflt",
   "cwd": ".",
-  "goal": "From an empty git repo (or existing M0), build a tile-based dungeon roguelike using aflt loop: seed M0 if missing, then M1-M4 gameplay milestones, then an equivalent M5a eval harness, then at most 3 eval-gated improvement rounds that stop at plateau. Zero-dependency Node ESM, HTML canvas, node:test, server on 127.0.0.1 (default PORT 8792; HOST overrides; 8790 and 8791 are commonly taken).",
-  "acceptance": "M0 leaves smoke tests green. M1-M4 and M5a each leave the node:test suite green. M5a adds scripts/eval (bot.js, scorer.js, eval.js) with the original metric names and weights (crash_free 0.25, solvability 0.20, avg_depth 0.20, turns_survived 0.15, balance_sanity 0.20; avg_depth target 3.5) and writes eval/history.jsonl. Then at most 3 improve rounds, stopping when overall plateaus, regresses after revert, reaches >= 99, or hits 3 rounds. Local commits per passed phase are allowed; no remotes, no push.",
+  "workdir": {
+    "mode": "project"
+  },
+  "goal": "From an empty git repo seeded only with instructions and the loop itself (AGENTS.md, SPEC.md, .agentfleet.json, .gitignore, and .agentfleet/ with this loop, its prompts and its two check scripts — no game code, no HTML), build a tile-based dungeon roguelike using aflt loop: M0 is a real agent build of the scaffold from SPEC.md, then M1-M4 gameplay milestones, then an equivalent M5a eval harness, then at most 3 eval-gated improvement rounds that stop at plateau. Zero-dependency Node ESM, HTML canvas, node:test, server on 127.0.0.1 (default PORT 8792; HOST overrides; 8790 and 8791 are commonly taken).",
+  "acceptance": "M0: the agent writes package.json, server.js, public/index.html, src/main.js, test/smoke.test.js and README.md itself (nothing is copied in); .agentfleet/checks/m0-check.cjs verifies them structurally, runs node --test, and boots the server. M1-M4 and M5a each leave the node:test suite green. M5a adds scripts/eval (bot.js, scorer.js, eval.js) with the original metric names and weights (crash_free 0.25, solvability 0.20, avg_depth 0.20, turns_survived 0.15, balance_sanity 0.20; avg_depth target 3.5) and writes eval/history.jsonl. Then at most 3 improve rounds, stopping when overall plateaus, regresses after revert, reaches >= 99, or hits 3 rounds. Local commits per passed phase are allowed; no remotes, no push.",
   "plannedPhaseGate": "none",
   "allow": {
     "commit": true,
@@ -15,16 +18,42 @@
     "maxHours": 8,
     "maxPhases": 16
   },
+  "protected": {
+    "paths": [
+      ".agentfleet/**"
+    ]
+  },
   "phases": [
     {
-      "id": "m0",
+      "id": "seed-docs",
       "type": "script",
       "eval": {
-        "command": ["node", "seed-m0.js"],
+        "command": [
+          "node",
+          ".agentfleet/checks/m0-check.cjs",
+          "--seed-docs"
+        ],
         "exitCode": 0,
-        "timeoutSec": 120
+        "timeoutSec": 60
       },
-      "onPass": "commit"
+      "onPass": "none"
+    },
+    {
+      "id": "m0",
+      "session": "hello-aflt-m0",
+      "promptFile": "prompts/M0.txt",
+      "eval": {
+        "command": [
+          "node",
+          ".agentfleet/checks/m0-check.cjs"
+        ],
+        "exitCode": 0,
+        "timeoutSec": 180
+      },
+      "maxFixAttempts": 3,
+      "onPass": "commit",
+      "force": true,
+      "timeoutSec": 900
     },
     {
       "id": "m1",

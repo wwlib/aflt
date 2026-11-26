@@ -4,7 +4,7 @@
 /**
  * Portable M0 seed for hello-aflt.
  *
- * When the game cwd has no package.json, copies examples/loops/hello-aflt/m0-seed/
+ * When the game cwd has no package.json, copies examples/loops/hello-aflt-seeded/m0-seed/
  * into the cwd. If the tree already looks seeded, leaves files alone.
  * Always runs the smoke test afterward.
  *

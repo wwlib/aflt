@@ -36,7 +36,7 @@ Shared state vocabulary and colors: **Working** (green), **Waiting** (orange), *
 
 The third tab, **Loops**, lists `aflt loop` runs in this space: status, engine/model, budget, token rollup, step pipeline, phase tree with eval scores, eval tails, and start / pause / resume / stop / approve. Each loop has a **Making of** button that opens `/making-of/<loop>` (every AI call, commit, diff and artifact). See [09 — Loops](09-loops.md).
 
-![Loops view of a completed hello-aflt-scratch run](../images/dashboard-loops.png)
+![Loops view of a completed hello-aflt run](../images/dashboard-loops.png)
 
 Times are shown in your browser's local time zone with a short zone label (for example `2026-11-24 14:51:06 EST`): the **Recent** list, session and project details, timeline tooltips, the Loops detail (**Started** / **Updated**) and the making-of page. JSON APIs keep ISO UTC. The static `--snapshot` SVG stamp is rendered on the server and stays in ET.
 

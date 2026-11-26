@@ -133,7 +133,7 @@ describe('script phases (no AI call)', () => {
   it('hello-aflt seeds M0 with a script phase (no agent invocation)', () => {
     clearMods();
     const loop = require('../lib/loop');
-    const exampleJson = path.join(__dirname, '..', 'examples', 'loops', 'hello-aflt', 'hello-aflt.json');
+    const exampleJson = path.join(__dirname, '..', 'examples', 'loops', 'hello-aflt-seeded', 'hello-aflt.json');
     const r = loop.validateFile(exampleJson, { checkCwd: false, cwdBase: os.tmpdir() });
     assert.equal(r.ok, true, (r.errors || []).join('; '));
     const m0 = r.definition.phases[0];

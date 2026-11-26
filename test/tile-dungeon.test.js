@@ -24,7 +24,7 @@ describe('tile-dungeon stats', () => {
     assert.equal(r.ok, true);
     assert.equal(r.dryRun, true);
     assert.equal(r.plan.trials, 3);
-    assert.ok(r.plan.loopDef.includes('hello-aflt.json'));
+    assert.ok(r.plan.loopDef.includes('.agentfleet/loop.json'));
   });
 
   it('aggregates fake trial results', async () => {

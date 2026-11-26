@@ -2,11 +2,12 @@
 'use strict';
 
 /**
- * Improve-round eval gate for the hello-aflt-scratch loop (portable Node).
+ * Improve-round eval gate for the hello-aflt loop (portable Node).
  *
- * A copy of examples/loops/hello-aflt/improve-gate.js that lives inside the
- * project (.agentfleet/checks/), so improve rounds never run a script from
- * outside the project folder. Run from the game repo root:
+ * Lives inside the project (`.agentfleet/checks/`); improve rounds never run a
+ * script from outside the project folder. The non-default seeded variant keeps
+ * `examples/loops/hello-aflt-seeded/improve-gate.js` next to its definition.
+ * Run from the game repo root:
  *   node .agentfleet/checks/improve-gate.cjs
  *
  * Runs AFTER the worker (workers are told not to commit). Compares:

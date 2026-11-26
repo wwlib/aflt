@@ -35,8 +35,8 @@ State lives under `$AGENTFLEET_HOME/loops/<name>/` (`state.json` + runner lock).
 | `examples/loops/hello-eval.json` | Single phase: write HELLO.txt, grep eval |
 | `examples/loops/plan-next.json` | Seed phases + `type: "plan-next"` planner |
 | `examples/loops/self-improve.json` | Eval measure → score/baseline → plan-next → gate `--improve` |
-| `examples/loops/hello-aflt/` | Portable tile-dungeon: empty-repo M0 seed (script phase, no AI call) → M1–M5a → ≤3 improve rounds (Copilot-friendly) |
-| `examples/loops/hello-aflt-scratch/` | Same milestones from a docs-only seed (AGENTS.md + SPEC.md, no game code/HTML); the loop, prompts and checks ship inside the seed (`seed/.agentfleet/`), so nothing lives outside the project; M0 is a real agent build checked by `.agentfleet/checks/m0-check.cjs` |
+| `examples/loops/hello-aflt/` | Default tile-dungeon from scratch: docs-only seed (`install.sh` or `seed/`), loop under `seed/.agentfleet/`; `seed-docs` script then agent M0 → M1–M5a → ≤3 improve rounds (`plannedPhaseGate: "none"`) |
+| `examples/loops/hello-aflt-seeded/` | Non-default: M0 script (`seed-m0.js` copies scaffold, no AI call) then same milestones |
 | `examples/loops/hello-aflt/hello-aflt-improve.json` | Continue improve-only on an existing M5a game (loop name `hello-aflt-improve`) |
 
 Validate (safe; no engines):
@@ -45,12 +45,12 @@ Validate (safe; no engines):
 aflt --space tutorial loop validate examples/loops/hello-eval.json --json
 aflt --space tutorial loop validate examples/loops/plan-next.json --json
 aflt --space tutorial loop validate examples/loops/self-improve.json --json
-aflt --space tutorial loop validate examples/loops/hello-aflt/hello-aflt.json --json
+aflt --space tutorial loop validate examples/loops/hello-aflt/seed/.agentfleet/loop.json --json
 aflt --space tutorial loop validate examples/loops/hello-aflt/hello-aflt-improve.json --json
-aflt --space tutorial loop validate examples/loops/hello-aflt-scratch/seed/.agentfleet/loop.json --json
+aflt --space tutorial loop validate examples/loops/hello-aflt-seeded/hello-aflt.json --json
 ```
 
-**hello-aflt one-liner** (work Mac / Copilot; no Grok Bot): create a folder, `git init`, then `aflt loop run /path/to/aflt/examples/loops/hello-aflt/hello-aflt.json` — see [`examples/loops/hello-aflt/README.md`](../../examples/loops/hello-aflt/README.md) and the full work-Mac guide [`docs/copilot-live-test.md`](../copilot-live-test.md). Optional once: `export AGENTFLEET_ENGINE=copilot` (and `COPILOT_MODEL=auto` when the account default model is unavailable). Continue-improve on an existing tree needs `--allow-existing`.
+**hello-aflt quick start** (work Mac / Copilot; no Grok Bot): empty folder → `examples/loops/hello-aflt/install.sh`, `git init`, commit, then `aflt loop run .agentfleet/loop.json` — see [`examples/loops/hello-aflt/README.md`](../../examples/loops/hello-aflt/README.md) and [`docs/copilot-live-test.md`](../copilot-live-test.md). Optional: `export AGENTFLEET_ENGINE=copilot` and `COPILOT_MODEL=auto`. Continue-improve on an existing tree needs `--allow-existing`.
 
 Success text shape:
 
@@ -96,7 +96,7 @@ Before an unattended run, `aflt doctor --strict --loop <def.json>` checks that t
 - Planned improve rounds whose `eval.command` climbs out of the project (`../x.js`, or a missing absolute path elsewhere) are rejected and sent back to the planner.
 - `"workdir": { "mode": "project" }` — run in the project's own clean git repo even though it is not empty and holds the definition (what `aflt loop init` sets). Refuses a dirty tree and the aflt checkout.
 - `type: "plan-next"`: planner must write `$AGENTFLEET_HOME/loops/<name>/plan-next.json` as `{ "done": true }` or `{ "phases": [ … ] }`
-- `type: "script"`: no AI call — the phase's `eval.command` is the step (seed a scaffold, run a setup script). No prompt, no session, no fix attempts, not counted in `budget.maxRuns`; `onPass` still applies. hello-aflt's `m0` and hello-aflt-scratch's `seed-docs` use this; dry-run shows them as `engine=null session=null maxFix=0 … permission=no-agent`.
+- `type: "script"`: no AI call — the phase's `eval.command` is the step (seed a scaffold, run a setup script). No prompt, no session, no fix attempts, not counted in `budget.maxRuns`; `onPass` still applies. hello-aflt's `seed-docs` and hello-aflt-seeded's `m0` use this; dry-run shows them as `engine=null session=null maxFix=0 … permission=no-agent`.
 - Newly planned phases get `gate: "approve"` unless the phase sets `gate` or the loop sets `plannedPhaseGate: "none"`
 - Cap growth with `budget.maxPhases`
 - `onPass` (`none`|`commit`|`merge`|`push`) only runs when loop-level `allow` flags permit (default all false)
@@ -112,7 +112,7 @@ During improve rounds the dashboard shows the round (`improve-r2 (round 2/3)`, `
 
 `aflt loop start` registers a loop as `active` without running phases in that process. `aflt dashboard --serve` hosts an in-process scheduler (one runner per name; lock respected). Loops view: list, phase pipeline, eval tails, History links, start/pause/resume/stop/approve, define/edit form, and a **Making of** button.
 
-![Loops view: a completed hello-aflt-scratch run with eval scores per phase](../images/dashboard-loops.png)
+![Loops view: a completed hello-aflt run with eval scores per phase](../images/dashboard-loops.png)
 
 `budget.hoursUsed`, `elapsedMs` and the Loops “Elapsed” / “budget” hours are **active run time**: the sum of run segments from each start or resume until the loop completes, fails, stops, pauses or waits at a gate. A loop that finishes and is resumed hours later does not count the idle gap, and `budget.maxHours` is enforced on the same number. `wallElapsedMs` (in `aflt loop status --json`) keeps the wall time since `startedAt`. Loop state written before this change has no `activeMs`; its active time is rebuilt from the loop's history at read time (the state file is not rewritten until the loop runs again).
 

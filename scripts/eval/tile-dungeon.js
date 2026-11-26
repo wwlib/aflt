@@ -153,13 +153,17 @@ function buildPlan(opts) {
     'examples',
     'loops',
     'hello-aflt',
-    'hello-aflt.json'
+    'seed',
+    '.agentfleet',
+    'loop.json'
   );
+  const seedDir = path.join(base, 'examples', 'loops', 'hello-aflt', 'seed');
   return {
     candidate,
     base,
     sha,
     loopDef,
+    seedDir,
     afJs: path.join(candidate, 'bin', 'af.js'),
     trials: opts.trials,
     engine: opts.engine,
@@ -191,6 +195,16 @@ async function runOneTrial(n, plan, opts, deps) {
 
   try {
     gitInit(tmpDir, opts.env);
+    fs.cpSync(plan.seedDir, tmpDir, { recursive: true });
+    spawnSync('git', ['-C', tmpDir, 'add', '-A'], {
+      encoding: 'utf8',
+      env: opts.env || process.env,
+    });
+    spawnSync(
+      'git',
+      ['-C', tmpDir, '-c', 'user.name=aflt', '-c', 'user.email=aflt@test', 'commit', '-qm', 'seed'],
+      { encoding: 'utf8', env: opts.env || process.env }
+    );
     try {
       const created = spaceLib.createSpace(spaceName, { spacesRoot: opts.spacesRoot });
       spaceCreated = created.name;
