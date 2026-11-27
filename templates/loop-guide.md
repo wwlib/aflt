@@ -120,6 +120,31 @@ real backend exists:
   `eval.noRegress` (compare to the previous live line in `eval/history.jsonl`)
   instead of fragile regexes. Legacy `passRegex` still works when the contract
   fields are omitted.
+- **Fixture tier coverage (eval milestone)** — before `protected.fromPhase` locks
+  paths, the eval milestone must seed **every tier** named in human guidance
+  (for chat-agent: `facts`, `updates`, `multihop`, `longgap`, `synthesis`,
+  `persona`). Each tier needs at least **3 probes** in
+  `eval/fixtures/transcript.json` by default (`eval.coverage.minCasesPerTier`).
+  The `updates` tier needs multi-step update chains and partial corrections
+  (at least 2 chains and 2 update probes with `forbid` entries). Set on the
+  eval phase check:
+
+```json
+"eval": {
+  "command": "npm test && node scripts/eval/eval.js --json",
+  "coverage": {
+    "tiers": ["facts", "updates", "multihop", "longgap", "synthesis", "persona"],
+    "minCasesPerTier": 3,
+    "minUpdateChains": 2,
+    "fixture": "eval/fixtures/transcript.json"
+  }
+}
+```
+
+  Optional `eval.coverage.command` runs a project script instead of (or in
+  addition to) the built-in probe counter. If any tier is below the minimum, the
+  eval phase **fails with fix attempts** so fixtures are complete before
+  protected paths take effect.
 - **Mock gate** — every feature milestone after the eval milestone runs
   `node scripts/eval/eval.js --json` (mock) in its check.
 - **Freeze eval assets** — after the eval milestone, set loop-level
@@ -171,7 +196,9 @@ real backend exists:
       "onPass": "commit", "timeoutSec": 1800,
       "eval": { "command": "npm test && node scripts/eval.js --json", "timeoutSec": 600 } },
     { "id": "eval", "promptFile": "prompts/eval.md", "force": true, "onPass": "commit",
-      "eval": { "command": "npm test && node scripts/eval/eval.js --json" } },
+      "eval": { "command": "npm test && node scripts/eval/eval.js --json",
+        "coverage": { "tiers": ["facts", "updates", "multihop", "longgap", "synthesis", "persona"],
+          "minCasesPerTier": 3 } } },
     { "id": "m1", "promptFile": "prompts/m1.md", "gate": "approve", "force": true,
       "maxFixAttempts": 3, "onPass": "commit",
       "eval": { "command": "npm test && node scripts/eval/eval.js --json" } },
