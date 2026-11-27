@@ -5,13 +5,13 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
 
 const evalCoverage = require('../lib/eval-coverage');
 const loop = require('../lib/loop');
 const loopInit = require('../lib/loop-init');
 
 const TIERS = ['facts', 'updates', 'multihop', 'longgap', 'synthesis', 'persona'];
+const { initTestGitRepo, runGit } = require('./git-helpers');
 
 function makeFixture(dir, opts = {}) {
   const min = opts.minPerTier != null ? opts.minPerTier : 3;
@@ -164,10 +164,7 @@ describe('loop runner eval.coverage', () => {
     stubBin = path.join(home, 'cursor-agent');
     fs.writeFileSync(stubBin, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     repo = fs.mkdtempSync(path.join(os.tmpdir(), 'af-ecov-repo-'));
-    spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: repo });
-    fs.writeFileSync(path.join(repo, 'README.md'), 'x\n');
-    spawnSync('git', ['add', '-A'], { cwd: repo });
-    spawnSync('git', ['commit', '-q', '-m', 'init'], { cwd: repo });
+    initTestGitRepo(repo);
     makeFixture(repo, { thinUpdates: true });
   });
   afterEach(() => {
@@ -221,8 +218,10 @@ describe('loop runner eval.coverage', () => {
 
   it('protected violation summary mentions locked fixtures', async () => {
     makeFixture(repo);
-    spawnSync('git', ['add', '-A'], { cwd: repo });
-    spawnSync('git', ['commit', '-q', '-m', 'eval seed'], { cwd: repo });
+    const seedAdd = runGit(repo, ['add', '-A']);
+    assert.equal(seedAdd.status, 0, seedAdd.stderr || 'git add');
+    const seedCommit = runGit(repo, ['commit', '-q', '-m', 'eval seed']);
+    assert.equal(seedCommit.status, 0, seedCommit.stderr || 'git commit');
     const def = {
       name: 'prot-cov',
       cwd: repo,

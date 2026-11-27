@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { initTestGitRepo } = require('./git-helpers');
 
 function clearMods() {
   for (const m of ['../lib/util', '../lib/loop', '../lib/registry', '../lib/config', '../lib/turns', '../lib/usage', '../lib/notify', '../lib/making-of']) {
@@ -25,7 +25,7 @@ function withHome(fn) {
     const cwd = path.join(root, 'project');
     const outside = path.join(root, 'outside-checkout', 'examples', 'loops', 'demo');
     for (const d of [home, cwd, outside]) fs.mkdirSync(d, { recursive: true });
-    spawnSync('git', ['init', '-q', cwd]);
+    initTestGitRepo(cwd);
     const prev = { HOME: process.env.HOME, AGENTFLEET_HOME: process.env.AGENTFLEET_HOME, AFLT_NOTIFY_URL: process.env.AFLT_NOTIFY_URL };
     process.env.HOME = home;
     process.env.AGENTFLEET_HOME = home;

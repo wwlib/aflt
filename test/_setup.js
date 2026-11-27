@@ -13,6 +13,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { applyGitEnvToProcess } = require('./git-helpers');
 
 const hermeticDir = path.join(__dirname, 'fixtures', 'hermetic');
 const stubHc = path.join(hermeticDir, 'hc');
@@ -54,6 +55,8 @@ for (const key of [
 ]) {
   delete process.env[key];
 }
+
+applyGitEnvToProcess();
 
 process.env.AGENTFLEET_TEST_HERMETIC = '1';
 process.env.AGENTFLEET_HC_BIN = stubHc;

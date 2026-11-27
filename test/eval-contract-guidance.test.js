@@ -15,6 +15,7 @@ const loopInit = require('../lib/loop-init');
 
 const { evalPassed, isInfraEvalFailure } = loop;
 const t = loop._test;
+const { initTestGitRepo } = require('./git-helpers');
 
 describe('eval contract: evalPassed', () => {
   it('keeps passRegex behavior when no contract fields', () => {
@@ -155,10 +156,7 @@ describe('plan-next short-circuit and gate baseSha', () => {
     stubBin = path.join(home, 'cursor-agent');
     fs.writeFileSync(stubBin, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     repo = fs.mkdtempSync(path.join(os.tmpdir(), 'af-pn-repo-'));
-    spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: repo });
-    fs.writeFileSync(path.join(repo, 'README.md'), 'x\n');
-    spawnSync('git', ['add', '-A'], { cwd: repo });
-    spawnSync('git', ['commit', '-q', '-m', 'init'], { cwd: repo });
+    initTestGitRepo(repo);
     fs.mkdirSync(path.join(repo, 'eval'), { recursive: true });
     fs.writeFileSync(
       path.join(repo, 'eval', 'history.jsonl'),
@@ -243,7 +241,8 @@ describe('plan-next short-circuit and gate baseSha', () => {
     assert.equal(first.status, 'waiting');
     assert.equal(first.state.phases.gated.baseSha, null);
     fs.writeFileSync(path.join(repo, 'during-gate.txt'), 'human edit\n');
-    loop.requestApprove('gate-sha');
+    const approved = loop.requestApprove('gate-sha');
+    assert.equal(approved.ok, true, approved.error || 'approve failed');
     const after = loop.loadState('gate-sha');
     assert.ok(after.phases.gated.baseSha);
   });
