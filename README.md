@@ -7,7 +7,7 @@
 <p align="center">
   <img alt="Node 20.10+" src="https://img.shields.io/badge/node-%3E%3D20.10-brightgreen?logo=node.js&logoColor=white"/>
   <img alt="version 1.5.0" src="https://img.shields.io/badge/version-1.5.0-blue"/>
-  <img alt="886 tests passing" src="https://img.shields.io/badge/tests-886%20passing-success"/>
+  <img alt="984 tests passing" src="https://img.shields.io/badge/tests-984%20passing-success"/>
   <img alt="macOS | Linux untested" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20untested-lightgrey"/>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-yellow"/>
 </p>

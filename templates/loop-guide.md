@@ -75,8 +75,10 @@ the defaults in this guide.
 ## 6. Budget caps
 
 - Always set `budget`: `maxRuns` (agent runs, including fix attempts),
-  `maxHours` (active run time), and `maxPhases` (total phases including the
-  ones plan-next adds). Size them from the budget you are given.
+  `maxHours` (active run time), `maxPhases` (total phases including the
+  ones plan-next adds), and optional `maxTokens` (rollup from engine usage;
+  skipped when the engine recorded no token total). Size them from the budget
+  you are given.
 - Copilot bills AI credits per token; keep prompts short and phases few.
 
 ## 7. Improve rounds (optional, recommended when there is an eval)
@@ -108,9 +110,9 @@ real backend exists:
 {
   "overall": 87.5,
   "mode": "mock",
-  "tiers": { "facts": 100, "updates": 80, "multihop": 75, "longgap": 90, "synthesis": 85, "persona": 95 },
-  "probes": [{ "id": "p1", "tier": "facts", "score": 100 }],
-  "weakest": "multihop"
+  "tiers": { "<tier-a>": 100, "updates": 80 },
+  "probes": [{ "id": "p1", "tier": "<tier-a>", "score": 100 }],
+  "weakest": "<tier-b>"
 }
 ```
 
@@ -122,18 +124,20 @@ real backend exists:
   fields are omitted.
 - **Fixture tier coverage (eval milestone)** — before `protected.fromPhase` locks
   paths, the eval milestone must seed **every tier** named in human guidance
-  (for chat-agent: `facts`, `updates`, `multihop`, `longgap`, `synthesis`,
-  `persona`). Each tier needs at least **3 probes** in
-  `eval/fixtures/transcript.json` by default (`eval.coverage.minCasesPerTier`).
-  The `updates` tier needs multi-step update chains and partial corrections
-  (at least 2 chains and 2 update probes with `forbid` entries). Set on the
+  (use the tier names your scorer defines — for example memory `facts`,
+  `updates`, multihop, and so on). Each tier needs at least **3 probes** in
+  the fixture file by default (`eval.coverage.minCasesPerTier`). When the
+  `updates` tier exists, probes need **multi-step update chains** (explicit
+  `chain` / `update_chain` ids shared by 2+ update probes, or ordered
+  fact→correction pairs in the same session — distinct sessions alone do not
+  count) and partial corrections (update probes with `forbid`). Set on the
   eval phase check:
 
 ```json
 "eval": {
   "command": "npm test && node scripts/eval/eval.js --json",
   "coverage": {
-    "tiers": ["facts", "updates", "multihop", "longgap", "synthesis", "persona"],
+    "tiers": ["<tier-a>", "<tier-b>", "updates"],
     "minCasesPerTier": 3,
     "minUpdateChains": 2,
     "fixture": "eval/fixtures/transcript.json"
@@ -153,8 +157,13 @@ real backend exists:
   phases and improve rounds must not edit them.
 - **Live eval script phase** — add `"type": "script"` with
   `eval.command: node scripts/eval/eval.js --json --live --write`,
-  `eval.passRegex: "tiers"` (or contract fields), `eval.infraRetries: 1`, and a
-  generous `timeoutSec`. It costs no AI tokens.
+  `eval.minOverall` and/or `eval.minTiers` and/or `eval.noRegress` (not
+  `passRegex` alone), `eval.infraRetries: 1`, and a generous `timeoutSec`. It
+  costs no AI tokens.
+- **Eval integrity** — the milestone that builds the eval also writes the
+  scorer; mock mode should not score 100 on an empty app (prove the eval can
+  fail). `forbid` checks should be negation-aware or judge-confirmed (a reply
+  that warns about a stale value, e.g. “no shrimp paste”, is not a forbid hit).
 
 ## 9. Approval gate after the eval milestone
 
@@ -190,21 +199,21 @@ real backend exists:
   "workdir": { "mode": "project" },
   "protected": { "paths": ["eval/fixtures/**", "scripts/eval/**"], "fromPhase": "eval" },
   "allow": { "commit": true, "merge": false, "push": false },
-  "budget": { "maxRuns": 30, "maxHours": 4, "maxPhases": 12 },
+  "budget": { "maxRuns": 30, "maxHours": 4, "maxPhases": 12, "maxTokens": 5000000 },
   "phases": [
     { "id": "m0", "promptFile": "prompts/m0.md", "force": true, "maxFixAttempts": 3,
       "onPass": "commit", "timeoutSec": 1800,
       "eval": { "command": "npm test && node scripts/eval.js --json", "timeoutSec": 600 } },
     { "id": "eval", "promptFile": "prompts/eval.md", "force": true, "onPass": "commit",
       "eval": { "command": "npm test && node scripts/eval/eval.js --json",
-        "coverage": { "tiers": ["facts", "updates", "multihop", "longgap", "synthesis", "persona"],
-          "minCasesPerTier": 3 } } },
+        "coverage": { "tiers": ["<tier-a>", "<tier-b>", "updates"],
+          "minCasesPerTier": 3, "minUpdateChains": 2 } } },
     { "id": "m1", "promptFile": "prompts/m1.md", "gate": "approve", "force": true,
       "maxFixAttempts": 3, "onPass": "commit",
       "eval": { "command": "npm test && node scripts/eval/eval.js --json" } },
     { "id": "live-eval", "type": "script",
       "eval": { "command": "node scripts/eval/eval.js --json --live --write",
-        "passRegex": "tiers", "infraRetries": 1, "timeoutSec": 1800 } },
+        "minOverall": 0, "noRegress": true, "infraRetries": 1, "timeoutSec": 1800 } },
     { "id": "plan-next", "type": "plan-next", "model": "<strong planning model>",
       "targetOverall": 95, "promptFile": "prompts/plan-next.md", "maxFixAttempts": 2,
       "onPass": "none", "force": true }
