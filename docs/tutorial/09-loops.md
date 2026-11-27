@@ -24,7 +24,16 @@ aflt --space tutorial loop approve <name> [--json]       # release gate: "approv
 aflt --space tutorial making-of <name> [--out file.html] [--serve] [--with-files] [--json]
 ```
 
-New project? [14 — New looped project](14-new-project.md) walks through `aflt init` and `aflt loop init`, which drafts `.agentfleet/loop.json` from `SPEC.md` / `AGENTS.md` and checks it against the loop-writing guide.
+New project? [14 — New looped project](14-new-project.md) walks through `aflt init` and `aflt loop init`, which drafts `.agentfleet/loop.json` from `SPEC.md` / `AGENTS.md` and checks it against the loop-writing guide. Example human eval briefs (chat agent, game, web app) live under [`examples/guidance/`](../../examples/guidance/).
+
+**Unattended runs:** `aflt loop start <file>` registers the loop for the
+dashboard scheduler (`aflt dashboard --serve` → Loops). The scheduler respects
+the runner lock (one process per loop), resumes dead locks on server start, and
+honors pause/stop from the API. Foreground `aflt loop run` / `resume` spawn a
+**detached** runner child (survives closing the launching shell); stop it with
+`aflt loop stop <name>` (signals the recorded runner pid — do not pattern-kill
+processes). Optional `budget.maxTokens` caps total reported tokens when engines
+record usage; enforcement is skipped when usage is unknown.
 
 State lives under `$AGENTFLEET_HOME/loops/<name>/` (`state.json` + runner lock). When a loop starts, each phase's `promptFile` is copied to `loops/<name>/prompts/` and check scripts outside the project (with their folder) to `loops/<name>/files/`; resume reads the copies (`promptSnapshot`; the original stays in `promptFileSource` / `eval.commandSource`). `loop validate` warns about prompt files or check paths outside the project. Definitions you save from the UI go only under `$AGENTFLEET_HOME/loops/definitions` (or configured loops dir).
 

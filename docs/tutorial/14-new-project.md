@@ -55,6 +55,7 @@ milestones, and how we know it works.
 
 ```bash
 cd tile-dungeon
+git add -A && git commit -m "Seed project docs"   # if you have not committed yet
 aflt loop init                       # uses the engine and space in .agentfleet.json
 aflt loop init --dry-run             # print the drafting prompt; no engine call
 aflt loop init --engine copilot --build-model auto --plan-model claude-sonnet-5.5
@@ -74,7 +75,7 @@ The draft must pass `aflt loop validate` **and** the checks policy:
 | M0 builds the test harness and an eval script, and its prompt says so | everything after it is judged by them |
 | every phase has a real check (`true`, `exit 0`, `echo`, `… \|\| true` are refused) | a phase that cannot fail teaches nothing |
 | checks run files inside the project (no `../` or outside scripts) | a missing outside file sends agents searching the disk |
-| an approval gate after the harness (after M0, or after a dedicated eval milestone when guidance says so) | you see fixtures/scores and the cost before feature work |
+| an approval gate after M0, or after the eval milestone when the draft has `eval.coverage` | you see fixtures/scores and the cost before feature work |
 | `budget.maxRuns` or `budget.maxHours` is set; plan-next has `budget.maxPhases` | runaway protection |
 | plan-next has `"force": true` | the planner must write its plan file |
 
@@ -114,13 +115,16 @@ The dashboard (`aflt dashboard --serve`, Loops → Saved definitions) shows the
 same definition: phase ids, checks, gates, models, prompt files and
 `improveModel`. Editing there keeps fields the form has no input for.
 
-## 5. The gate after M0
+## 5. The gate after the eval milestone
 
-When the loop reaches the gated phase it stops with `status=waiting`:
+When the loop reaches the gated phase it stops with `status=waiting`. Simple
+loops gate after M0; projects with a dedicated eval milestone (fixture +
+`eval.coverage`) gate on the **next** phase so you can review fixtures, mock
+score, and live baseline before feature work:
 
 ```
-$ aflt loop status tile-dungeon
-gate: waiting for approval before phase m1 (aflt loop approve tile-dungeon)
+$ aflt loop status chat-agent
+gate: waiting for approval before phase m1 (aflt loop approve chat-agent)
 cost so far: 12.4 credits · $0.12 · 9m active · 1.5M tok
 ```
 

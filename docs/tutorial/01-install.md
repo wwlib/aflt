@@ -102,9 +102,19 @@ Completes `aflt`, `af`, and `agentfleet`.
 
 ## Try it
 
-Use the throwaway space so doctor/setup inspect that home, not your default:
+Projects created with aflt init record a **space** in `.agentfleet.json`. For
+day-to-day loop commands you can omit `--space` and AGENTFLEET_HOME as long as
+you run from the project folder (or pass a loop path under it): **loop run**,
+**loop status**, **loop resume**, and **loop approve** apply that space
+automatically, the same way loop init does. An explicit AGENTFLEET_HOME still wins
+over the recorded space; when both conflict, the CLI prints a warning.
+
+For tutorials, use a throwaway space so doctor/setup inspect that home, not your
+default — **unset `AGENTFLEET_HOME`** unless you mean to override:
 
 ```bash
+unset AGENTFLEET_HOME
+npm install -g github:wwlib/aflt
 aflt space create tutorial   # if needed
 aflt --space tutorial doctor --json | head -c 400
 aflt --space tutorial setup --json

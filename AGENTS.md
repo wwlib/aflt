@@ -10,6 +10,10 @@ Human overview: [README.md](README.md) (dashboard screenshots in `docs/images/`;
 
 **Tutorial for humans (and agents helping them):** [docs/tutorial/README.md](docs/tutorial/README.md) — beginner → advanced; create a throwaway `aflt space create tutorial` first so you never touch the real default home.
 
+## What's new (2026-11-27)
+
+- **Docs-only loop policy** — `loop init` policy gates after the eval milestone when `eval.coverage` is present; enforces `protected.fromPhase`, live-eval contract fields, and stricter update-chain counting. `loop run` / `status` / `resume` / `approve` / `start` apply `.agentfleet.json` space. Optional `budget.maxTokens`. Examples: `examples/guidance/`. Tests: `test/loop-init-eval-policy.test.js`, `test/eval-update-chains.test.js`, `test/loop-budget-max-tokens.test.js`, `test/loop-project-space.test.js`.
+
 ## What's new (2026-11-26)
 
 - **Eval fixture tier coverage** — `eval.coverage` on phase checks (`tiers`, `minCasesPerTier` default 3, optional `command`, `minUpdateChains`, `fixture`) fails the eval milestone with fix attempts when probes per tier are thin, before protected paths lock. Plan-next and protected-path failure text tells planners not to edit fixtures. Guide: `templates/loop-guide.md` §8; tests: `test/eval-tier-coverage.test.js`.

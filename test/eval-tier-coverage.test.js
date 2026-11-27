@@ -27,7 +27,21 @@ function makeFixture(dir, opts = {}) {
         expect_any: ['x'],
         forbid: tier === 'updates' && i < 2 ? ['stale'] : [],
       };
-      if (tier === 'updates') p.chain = i < 2 ? 'trip' : 'sync';
+      if (tier === 'updates') {
+        p.chain = i < 2 ? 'trip' : 'sync';
+        if (i === 2) {
+          probes.push({
+            id: `${tier[0]}${i}b`,
+            tier,
+            session: i + 1,
+            after_turn: i + 1,
+            question: `q-${tier}-${i}-b`,
+            expect_any: ['x'],
+            forbid: ['stale'],
+            chain: 'sync',
+          });
+        }
+      }
       probes.push(p);
     }
   }

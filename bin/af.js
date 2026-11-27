@@ -8207,6 +8207,25 @@ async function cmdLoop(argv) {
   if (!sub || sub === 'help' || sub === '-h' || sub === '--help') {
     fail(usage);
   }
+  if (['run', 'start', 'status', 'resume', 'approve'].includes(sub)) {
+    const loopInit = require('../lib/loop-init');
+    let spaceCwd = process.cwd();
+    if ((sub === 'run' || sub === 'start') && args[1]) {
+      try {
+        const loaded = loopLib.loadDefinitionFile(args[1]);
+        const defDir = path.dirname(loaded.path);
+        const root = loopLib.projectRootFromDefinitionDir(defDir);
+        if (root) spaceCwd = root;
+      } catch (_) {
+        /* keep cwd */
+      }
+    }
+    try {
+      loopInit.applyProjectSpaceIfNeeded(spaceCwd, { throwOnError: true });
+    } catch (err) {
+      fail(err.message || String(err), { json: asJson });
+    }
+  }
   if (
     (sub === 'run' || sub === 'resume') &&
     !flags['dry-run'] &&
