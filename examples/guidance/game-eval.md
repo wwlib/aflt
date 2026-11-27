@@ -23,7 +23,8 @@ commands) and expected world state snapshots. The fixture lives under
 - Dedicated **eval milestone** after core gameplay exists: writes fixtures +
   scorer + tests; `eval.coverage` lists every tier with `minCasesPerTier: 3`.
 - `protected.fromPhase` = that milestone id.
-- Gate **approve** on the next phase (human reviews fixture + mock score).
-- Script `live-eval` with contract fields (`minOverall` / `minTiers` /
-  `noRegress`), not `passRegex` alone.
+- Script `live-eval` immediately after the eval milestone with contract fields
+  (`minOverall` / `minTiers` / `noRegress`), not `passRegex` alone.
+- Gate **approve** on the phase after `live-eval` (human reviews fixture, mock
+  score, and live baseline).
 - Feature milestones run `npm test && node scripts/eval/eval.js --json` (mock).

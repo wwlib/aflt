@@ -112,6 +112,36 @@ describe('aflt init (new looped project)', () => {
     assert.match(out.prompt, /Engine: copilot/);
   });
 
+  it('--isolated overrides AGENTFLEET_HOME to the project space with a warning', () => {
+    const otherHome = fs.mkdtempSync(path.join(os.tmpdir(), 'af-pi-other-'));
+    try {
+      const env = { ...process.env, HOME: home, AGENTFLEET_HOME: otherHome };
+      delete env.AFLT_SPACE;
+      const res = spawnSync(process.execPath, [afJs, 'init', 'iso-home', '--yes', '--isolated'], {
+        cwd: work,
+        env,
+        encoding: 'utf8',
+        timeout: 30000,
+      });
+      assert.equal(res.status, 0, res.stderr);
+      assert.match(res.stdout, /AGENTFLEET_HOME was set to/);
+      assert.match(res.stdout, new RegExp(otherHome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      const res2 = spawnSync(process.execPath, [afJs, 'init', 'iso-home-json', '--yes', '--isolated', '--json'], {
+        cwd: work,
+        env,
+        encoding: 'utf8',
+        timeout: 30000,
+      });
+      assert.equal(res2.status, 0, res2.stderr);
+      const out = JSON.parse(res2.stdout);
+      assert.ok(out.fleetHomeOverride);
+      assert.equal(out.fleetHomeOverride.from, otherHome);
+      assert.ok(out.fleetHomeOverride.to.includes('spaces/iso-home-json'));
+    } finally {
+      fs.rmSync(otherHome, { recursive: true, force: true });
+    }
+  });
+
   it('usage error without a name', () => {
     const res = af(['init']);
     assert.notEqual(res.status, 0);

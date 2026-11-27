@@ -18,7 +18,8 @@ DOM selectors in the loop checks unless the spec demands them):
 
 ## Loop requirements
 - **eval milestone** once routes and tests exist; `eval.coverage` on that phase.
-- `protected.fromPhase` = eval milestone id; gate on the following phase.
-- `live-eval` script uses `eval.minOverall` / `eval.minTiers` / `eval.noRegress`
-  and `eval.infraRetries: 1`.
+- `protected.fromPhase` = eval milestone id.
+- `live-eval` script immediately after the eval milestone (`eval.minOverall` /
+  `eval.minTiers` / `eval.noRegress`, `eval.infraRetries: 1`).
+- Gate **approve** on the phase after `live-eval`.
 - Later milestones: `npm test && node scripts/eval/eval.js --json`.
