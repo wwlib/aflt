@@ -167,9 +167,13 @@ real backend exists:
 
 ## 9. Approval gate after the eval milestone
 
-- Put `"gate": "approve"` on the phase **right after the eval milestone** (not
-  after `m0` unless there is no separate eval milestone), so a human reviews
-  the fixture, mock score, and live baseline before feature work continues.
+- When the loop has a **live-eval** script phase, it must run **immediately after**
+  the eval milestone and **before** the approval gate so the human sees a live
+  baseline score at the gate.
+- Put `"gate": "approve"` on the phase **right after live-eval** when present
+  (otherwise right after the eval milestone, or after `m0` when there is no
+  separate eval milestone), so a human reviews the fixture, mock score, and live
+  baseline before feature work continues.
 - Protected-path baselines are recorded **after** approval, so edits to
   `loop.json` during the gate wait are allowed.
 
@@ -208,12 +212,12 @@ real backend exists:
       "eval": { "command": "npm test && node scripts/eval/eval.js --json",
         "coverage": { "tiers": ["<tier-a>", "<tier-b>", "updates"],
           "minCasesPerTier": 3, "minUpdateChains": 2 } } },
-    { "id": "m1", "promptFile": "prompts/m1.md", "gate": "approve", "force": true,
-      "maxFixAttempts": 3, "onPass": "commit",
-      "eval": { "command": "npm test && node scripts/eval/eval.js --json" } },
     { "id": "live-eval", "type": "script",
       "eval": { "command": "node scripts/eval/eval.js --json --live --write",
         "minOverall": 0, "noRegress": true, "infraRetries": 1, "timeoutSec": 1800 } },
+    { "id": "m1", "promptFile": "prompts/m1.md", "gate": "approve", "force": true,
+      "maxFixAttempts": 3, "onPass": "commit",
+      "eval": { "command": "npm test && node scripts/eval/eval.js --json" } },
     { "id": "plan-next", "type": "plan-next", "model": "<strong planning model>",
       "targetOverall": 95, "promptFile": "prompts/plan-next.md", "maxFixAttempts": 2,
       "onPass": "none", "force": true }

@@ -1039,6 +1039,12 @@ async function cmdInit(argv) {
   for (const f of result.files) {
     out.push(`  ${f.action.padEnd(11)} ${path.relative(result.dir, f.path) || f.path}`);
   }
+  if (result.fleetHomeOverride) {
+    const { from, to } = result.fleetHomeOverride;
+    out.push(
+      `  WARNING: AGENTFLEET_HOME was set to ${from}; --isolated uses the project space at ${to} (unset AGENTFLEET_HOME in your shell when using --space).`
+    );
+  }
   if (result.isolation && result.isolation.ok) out.push('  isolation: ok (no parent repo, parent or global instructions, or shared space)');
   for (const w of (result.isolation && result.isolation.warnings) || []) out.push(`  WARNING (isolation): ${w.message}`);
   out.push('', 'next:');

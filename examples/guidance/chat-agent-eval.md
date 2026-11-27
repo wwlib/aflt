@@ -53,8 +53,8 @@ Aim for a live baseline well below 90:
 ## Loop requirements (for `aflt loop init`)
 - `protected.fromPhase` = the eval milestone id; paths
   `eval/fixtures/**` and `scripts/eval/**`.
-- Approval gate on the phase **right after** the eval milestone.
-- Script phase `live-eval`:
+- Script phase `live-eval` **immediately after** the eval milestone; approval
+  gate on the phase **right after** `live-eval`. Phase fields:
   `node scripts/eval/eval.js --json --live --write` with
   `eval.minOverall` / `eval.minTiers` / `eval.noRegress`, `eval.infraRetries: 1`,
   generous `timeoutSec`.

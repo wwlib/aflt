@@ -12,7 +12,9 @@ Human overview: [README.md](README.md) (dashboard screenshots in `docs/images/`;
 
 ## What's new (2026-11-27)
 
-- **Docs-only loop policy** — `loop init` policy gates after the eval milestone when `eval.coverage` is present; enforces `protected.fromPhase`, live-eval contract fields, and stricter update-chain counting. `loop run` / `status` / `resume` / `approve` / `start` apply `.agentfleet.json` space. Optional `budget.maxTokens`. Examples: `examples/guidance/`. Tests: `test/loop-init-eval-policy.test.js`, `test/eval-update-chains.test.js`, `test/loop-budget-max-tokens.test.js`, `test/loop-project-space.test.js`.
+- **Live-eval ordering** — `loop init` `checkLoopPolicy` and repair prompts require `live-eval` immediately after the eval milestone, with the approval gate on the next phase (live baseline visible at the gate). Tests: `test/loop-init-eval-policy.test.js`, `test/loop-init.test.js`.
+- **`aflt init --isolated` + `AGENTFLEET_HOME`** — overrides to the project space home with a clear warning instead of failing `fleet-home-override`. Tests: `test/project-init.test.js`.
+- **Docs-only loop policy** — `loop init` policy gates after `live-eval` (or the eval milestone when there is no live-eval) when `eval.coverage` is present; enforces `protected.fromPhase`, live-eval contract fields, and stricter update-chain counting. `loop run` / `status` / `resume` / `approve` / `start` apply `.agentfleet.json` space. Optional `budget.maxTokens`. Examples: `examples/guidance/`. Tests: `test/loop-init-eval-policy.test.js`, `test/eval-update-chains.test.js`, `test/loop-budget-max-tokens.test.js`, `test/loop-project-space.test.js`.
 
 ## What's new (2026-11-26)
 

@@ -106,6 +106,49 @@ describe('loop init: checks policy', () => {
     }
   });
 
+  it('enforces live-eval before the approval gate when an eval milestone exists', () => {
+    const li = require('../lib/loop-init');
+    const d = {
+      name: 'x',
+      budget: { maxRuns: 10, maxHours: 2 },
+      protected: { fromPhase: 'eval', paths: ['eval/**'] },
+      phases: [
+        {
+          id: 'm0',
+          prompt: 'Build tests and eval script.',
+          eval: { command: 'npm test' },
+        },
+        {
+          id: 'eval',
+          prompt: 'Build eval coverage fixtures.',
+          eval: {
+            command: 'npm test && node scripts/eval/eval.js --json',
+            coverage: { tiers: ['a'], minCasesPerTier: 3 },
+          },
+        },
+        {
+          id: 'm1',
+          gate: 'approve',
+          prompt: 'Feature',
+          eval: { command: 'npm test' },
+        },
+        {
+          id: 'live-eval',
+          type: 'script',
+          eval: {
+            command: 'node scripts/eval/eval.js --json --live --write',
+            minOverall: 0,
+            noRegress: true,
+            infraRetries: 1,
+          },
+        },
+      ],
+    };
+    const r = li.checkLoopPolicy(d, { definitionDir: '/x' });
+    assert.match(r.errors.join('\n'), /immediately after eval milestone/);
+    assert.match(r.errors.join('\n'), /after live-eval.*not before/);
+  });
+
   it('warns when build phases switch model back and forth', () => {
     const li = require('../lib/loop-init');
     const d = goodDraft();

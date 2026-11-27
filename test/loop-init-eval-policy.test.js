@@ -51,14 +51,6 @@ function evalProjectDraft() {
         },
       },
       {
-        id: 'm1',
-        promptFile: 'prompts/m1.md',
-        gate: 'approve',
-        force: true,
-        onPass: 'commit',
-        eval: { command: 'npm test && node scripts/eval/eval.js --json' },
-      },
-      {
         id: 'live-eval',
         type: 'script',
         eval: {
@@ -68,6 +60,14 @@ function evalProjectDraft() {
           infraRetries: 1,
           timeoutSec: 1800,
         },
+      },
+      {
+        id: 'm1',
+        promptFile: 'prompts/m1.md',
+        gate: 'approve',
+        force: true,
+        onPass: 'commit',
+        eval: { command: 'npm test && node scripts/eval/eval.js --json' },
       },
       {
         id: 'plan-next',
@@ -102,20 +102,31 @@ describe('loop init eval-milestone policy', () => {
     }
   });
 
-  it('requires approve gate after eval milestone, not right after m0', () => {
+  it('requires approve gate after live-eval, not right after m0 or eval', () => {
     const d = evalProjectDraft();
-    delete d.phases[2].gate;
+    delete d.phases[3].gate;
     const r = li.checkLoopPolicy(d, { definitionDir: '/x' });
     assert.match(r.errors.join('\n'), /phase m1.*"gate": "approve"/);
     assert.doesNotMatch(r.errors.join('\n'), /after m0/i);
   });
 
+  it('rejects live-eval after the approval gate', () => {
+    const d = evalProjectDraft();
+    const live = d.phases.find((p) => p.id === 'live-eval');
+    const m1 = d.phases.find((p) => p.id === 'm1');
+    d.phases = d.phases.filter((p) => p.id !== 'live-eval');
+    d.phases.splice(d.phases.indexOf(m1) + 1, 0, live);
+    const r = li.checkLoopPolicy(d, { definitionDir: '/x' });
+    assert.match(r.errors.join('\n'), /immediately after eval milestone/);
+    assert.match(r.errors.join('\n'), /after live-eval.*not before/);
+  });
+
   it('rejects gate on wrong phase when eval milestone exists', () => {
     const d = evalProjectDraft();
     d.phases[0].gate = 'approve';
-    delete d.phases[2].gate;
+    delete d.phases[3].gate;
     const r = li.checkLoopPolicy(d, { definitionDir: '/x' });
-    assert.match(r.errors.join('\n'), /right after eval milestone/);
+    assert.match(r.errors.join('\n'), /right after live-eval/);
   });
 
   it('enforces protected.fromPhase and live-eval contract', () => {

@@ -146,7 +146,10 @@ anything outside the folder that the engine could pick up:
 - the default space, or a space that also holds sessions for other folders
   (its `results/` folder is passed to the engine with `--add-dir`).
 
-`--isolated` turns those warnings into errors. Not covered by these checks:
+`--isolated` turns those warnings into errors, except when `AGENTFLEET_HOME`
+points elsewhere: init then uses the project space home and prints a warning
+with the old and new paths (`unset AGENTFLEET_HOME` and use `--space`).
+Not covered by these checks:
 Cursor account **User Rules** and installed skills, which Cursor adds to every
 chat, and the fact that Cursor's tools can read any path on disk. The drafting
 prompt, the planner prompt, the fix prompt and the starter `AGENTS.md` all tell
